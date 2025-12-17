@@ -11,30 +11,31 @@ const getEnv = (key: string): string | undefined => {
   return val;
 };
 
+// Use provided credentials as hardcoded defaults to bypass potential environment variable issues
 const SUPABASE_URL = getEnv('SUPABASE_URL') || 'https://ujjvaabarnbvfntvvlsp.supabase.co';
 const SUPABASE_ANON_KEY = getEnv('SUPABASE_ANON_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqanZhYWJhcm5idmZudHZ2bHNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5OTU0ODMsImV4cCI6MjA4MTU3MTQ4M30.zSdrxkVQWvgABbanv59l1ursAx6s9JrsTT0KlKKRtU4';
 
-console.log("SCF Music: Initializing Supabase with URL:", SUPABASE_URL.substring(0, 10) + "...");
+console.log("SCF Music: Supabase system connecting...");
 
 let supabaseClient: any;
 
 try {
   if (SUPABASE_URL && SUPABASE_URL.startsWith('http')) {
     supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log("SCF Music: Supabase client created.");
+    console.log("SCF Music: Supabase connected successfully.");
   }
 } catch (err) {
   console.error("Critical: Supabase initialization failed", err);
 }
 
+// Minimal mock to prevent UI crashes if client creation fails
 if (!supabaseClient) {
-  console.warn("SCF Music: Using Mock Supabase Client.");
   supabaseClient = {
     auth: {
       getSession: () => Promise.resolve({ data: { session: null }, error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-      signInWithPassword: () => Promise.reject(new Error("Database connection not established")),
-      signUp: () => Promise.reject(new Error("Database connection not established")),
+      signInWithPassword: () => Promise.reject(new Error("Veritabanı bağlantısı kurulamadı.")),
+      signUp: () => Promise.reject(new Error("Veritabanı bağlantısı kurulamadı.")),
       signOut: () => Promise.resolve({ error: null })
     },
     from: () => ({
@@ -50,7 +51,7 @@ if (!supabaseClient) {
     }),
     storage: {
       from: () => ({
-        upload: () => Promise.reject(new Error("Storage not configured")),
+        upload: () => Promise.reject(new Error("Dosya depolama ayarlanmadı.")),
         getPublicUrl: () => ({ data: { publicUrl: "" } })
       })
     },

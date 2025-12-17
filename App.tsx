@@ -16,7 +16,7 @@ import { Cards } from './components/Cards';
 import { Tracks } from './components/Tracks';
 import { Insights } from './components/Insights';
 import { Tickets } from './components/Tickets';
-import { Release, View, User, ReleaseStatus, Artist, Ticket } from './types';
+import { Release, View, User, Artist, Ticket } from './types';
 import { DataService } from './services/dataService';
 import { supabase } from './services/supabase';
 
@@ -31,15 +31,20 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     const initializeAuth = async () => {
       try {
-        if (!supabase || !supabase.auth) return;
+        if (!supabase || !supabase.auth) {
+          if (mounted) setIsLoading(false);
+          return;
+        }
 
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
         
         const session = data?.session;
-        if (session?.user) {
+        if (session?.user && mounted) {
           const role = await DataService.getUserRole(session.user.id);
           const user: User = {
             id: session.user.id,
@@ -52,17 +57,16 @@ const App: React.FC = () => {
           await DataService.syncUserProfile(user);
         }
       } catch (err: any) {
-        console.error("Auth init failed:", err);
+        console.error("Auth initialization failed:", err);
       } finally {
-        // Guaranteed to run, ensuring the loading screen disappears
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
 
     initializeAuth();
 
-    const authListener = supabase?.auth?.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
+    const authListener = supabase?.auth?.onAuthStateChange(async (event: string, session: any) => {
+      if (session?.user && mounted) {
         const role = await DataService.getUserRole(session.user.id);
         const user: User = {
           id: session.user.id,
@@ -72,18 +76,26 @@ const App: React.FC = () => {
           role: role
         };
         setCurrentUser(user);
-        if (view === View.LANDING || view === View.LOGIN || view === View.REGISTER) {
-          setView(View.PROFILE);
-        }
-      } else {
+        // Only switch view if we are on landing/login/register
+        setView(prevView => {
+           if ([View.LANDING, View.LOGIN, View.REGISTER].includes(prevView)) {
+             return View.PROFILE;
+           }
+           return prevView;
+        });
+      } else if (mounted) {
         setCurrentUser(null);
-        if (view !== View.LANDING && view !== View.LOGIN && view !== View.REGISTER) {
-          setView(View.LANDING);
-        }
+        setView(prevView => {
+           if (![View.LANDING, View.LOGIN, View.REGISTER].includes(prevView)) {
+             return View.LANDING;
+           }
+           return prevView;
+        });
       }
     });
 
     return () => {
+      mounted = false;
       if (authListener?.data?.subscription) {
           authListener.data.subscription.unsubscribe();
       }

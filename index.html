@@ -8,31 +8,34 @@
     <title>SCF Music - Distribute Your Music</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Browser environment fixes
+      // Global shims for browser compatibility
       window.process = window.process || { env: {} };
       
-      // Global diagnostic logger
-      console.log("SCF Music: HTML head initialized.");
+      // Address the DOMException warning by ensuring it's the native one
+      if (typeof window.DOMException === 'undefined') {
+        window.DOMException = Error;
+      }
+      
+      console.log("SCF Music: System environment shims applied.");
       
       window.onerror = function(message, source, lineno, colno, error) {
         console.error("Global Error Caught:", message, "at", source, ":", lineno);
         const errorDiv = document.createElement('div');
-        errorDiv.id = 'debug-error-overlay';
         errorDiv.style.position = 'fixed';
         errorDiv.style.top = '0';
         errorDiv.style.left = '0';
         errorDiv.style.width = '100%';
         errorDiv.style.padding = '20px';
-        errorDiv.style.background = 'rgba(153, 27, 27, 0.9)';
+        errorDiv.style.background = '#991b1b';
         errorDiv.style.color = 'white';
         errorDiv.style.fontSize = '14px';
         errorDiv.style.zIndex = '10000';
         errorDiv.style.fontFamily = 'monospace';
         errorDiv.innerHTML = `
-          <h2 style="margin-top:0">Uygulama Hatası (Diagnostic)</h2>
+          <h2 style="margin-top:0">Uygulama Hatası</h2>
           <p><strong>Mesaj:</strong> ${message}</p>
-          <p><strong>Kaynak:</strong> ${source}:${lineno}:${colno}</p>
-          <p style="margin-bottom:0; font-size: 12px; opacity: 0.8;">Vercel Environment Değişkenlerini (SUPABASE_URL, SUPABASE_ANON_KEY) kontrol edin.</p>
+          <p><strong>Yer:</strong> ${source}:${lineno}:${colno}</p>
+          <p style="margin-top: 10px; font-size: 12px;">Eğer ekran boş kalmaya devam ediyorsa, lütfen Vercel Environment Variables ayarlarınızı kontrol edin veya tarayıcı konsolunu inceleyin.</p>
         `;
         document.body.appendChild(errorDiv);
         return false;
@@ -77,15 +80,12 @@
   </head>
   <body class="text-slate-200 antialiased selection:bg-purple-500 selection:text-white">
     <div id="root">
-      <!-- Fallback content if React fails to mount -->
-      <div style="height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column;">
-        <div style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #6366f1; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        <p style="margin-top: 20px; color: #64748b; font-family: sans-serif; font-size: 14px;">SCF Music Yükleniyor...</p>
+      <div style="height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; background: #020617;">
+        <div style="width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.1); border-top-color: #6366f1; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <p style="margin-top: 24px; color: #94a3b8; font-family: sans-serif; font-size: 14px; letter-spacing: 0.1em;">SCF MUSIC YÜKLENİYOR</p>
       </div>
     </div>
     <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
-    
-    <!-- Explicitly load the entry point -->
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>
