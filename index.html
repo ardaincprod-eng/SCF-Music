@@ -8,74 +8,84 @@
     <title>SCF Music - Distribute Your Music</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Vercel/Browser environments process.env fix
+      // Browser environment fixes
       window.process = window.process || { env: {} };
       
-      // Global error tracker for debugging blank screens
+      // Global diagnostic logger
+      console.log("SCF Music: HTML head initialized.");
+      
       window.onerror = function(message, source, lineno, colno, error) {
+        console.error("Global Error Caught:", message, "at", source, ":", lineno);
         const errorDiv = document.createElement('div');
+        errorDiv.id = 'debug-error-overlay';
         errorDiv.style.position = 'fixed';
-        errorDiv.style.bottom = '10px';
-        errorDiv.style.left = '10px';
-        errorDiv.style.right = '10px';
-        errorDiv.style.padding = '15px';
-        errorDiv.style.background = '#991b1b';
+        errorDiv.style.top = '0';
+        errorDiv.style.left = '0';
+        errorDiv.style.width = '100%';
+        errorDiv.style.padding = '20px';
+        errorDiv.style.background = 'rgba(153, 27, 27, 0.9)';
         errorDiv.style.color = 'white';
-        errorDiv.style.fontSize = '12px';
-        errorDiv.style.borderRadius = '8px';
-        errorDiv.style.zIndex = '9999';
+        errorDiv.style.fontSize = '14px';
+        errorDiv.style.zIndex = '10000';
         errorDiv.style.fontFamily = 'monospace';
-        errorDiv.innerText = 'Uygulama Başlatma Hatası: ' + message + '\n\nLütfen Vercel Environment Variables ayarlarınızı kontrol edin.';
+        errorDiv.innerHTML = `
+          <h2 style="margin-top:0">Uygulama Hatası (Diagnostic)</h2>
+          <p><strong>Mesaj:</strong> ${message}</p>
+          <p><strong>Kaynak:</strong> ${source}:${lineno}:${colno}</p>
+          <p style="margin-bottom:0; font-size: 12px; opacity: 0.8;">Vercel Environment Değişkenlerini (SUPABASE_URL, SUPABASE_ANON_KEY) kontrol edin.</p>
+        `;
         document.body.appendChild(errorDiv);
         return false;
       };
     </script>
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
     "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.1",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.1/client",
     "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.32.0",
-    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm"
+    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
   }
 }
 </script>
-<style>
-    body {
-        background-color: #020617; /* Slate 950 */
-        background-image: 
-            radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.1) 0px, transparent 50%), 
-            radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.15) 0px, transparent 50%);
-        background-attachment: fixed;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .animate-fadeIn {
-        animation: fadeIn 0.5s ease-out forwards;
-    }
+    <style>
+        body {
+            background-color: #020617;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.1) 0px, transparent 50%), 
+                radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.15) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .animate-fadeIn {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
 
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar {
-        width: 8px;
-    }
-    ::-webkit-scrollbar-track {
-        background: #020617;
-    }
-    ::-webkit-scrollbar-thumb {
-        background: #1e293b;
-        border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-        background: #334155;
-    }
-</style>
-</head>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #020617; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    </style>
+  </head>
   <body class="text-slate-200 antialiased selection:bg-purple-500 selection:text-white">
-    <div id="root"></div>
+    <div id="root">
+      <!-- Fallback content if React fails to mount -->
+      <div style="height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+        <div style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #6366f1; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <p style="margin-top: 20px; color: #64748b; font-family: sans-serif; font-size: 14px;">SCF Music Yükleniyor...</p>
+      </div>
+    </div>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+    
+    <!-- Explicitly load the entry point -->
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>

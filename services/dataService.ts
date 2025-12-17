@@ -90,7 +90,8 @@ export const DataService = {
       
       const { data } = await query.order('created_at', { ascending: false });
       if (data) {
-        callback(data.map(this.mapReleaseFromDB));
+        // Explicitly call mapReleaseFromDB to avoid context issues
+        callback(data.map(item => DataService.mapReleaseFromDB(item)));
       }
     };
 
