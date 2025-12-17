@@ -1,83 +1,184 @@
-import { db, storage } from './firebase';
-import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  getDocs, 
-  query, 
-  where, 
-  onSnapshot,
-  setDoc,
-  getDoc
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-import { Release, Artist, User, Ticket } from '../types';
 
-export const FirebaseService = {
-  // --- AUTH & PROFILE ---
+import { supabase } from './supabase';
+import { Release, Artist, User, Ticket, ReleaseStatus } from '../types';
+
+export const DataService = {
+  // --- AUTH & USER PROFILE ---
   async syncUserProfile(user: User) {
-    const userRef = doc(db, "users", user.id);
-    await setDoc(userRef, {
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      isBanned: user.isBanned || false
-    }, { merge: true });
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        is_banned: user.isBanned || false
+      });
+    if (error) console.error("Error syncing profile:", error);
+  },
+
+  async getUserRole(userId: string): Promise<'artist' | 'admin'> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single();
+    
+    if (error || !data) return 'artist';
+    return data.role;
   },
 
   // --- RELEASES ---
-  async uploadFile(file: File, path: string): Promise<string> {
-    const fileRef = ref(storage, path);
-    await uploadBytes(fileRef, file);
-    return getDownloadURL(fileRef);
+  async uploadFile(file: File, bucket: string, path: string): Promise<string> {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, { cacheControl: '3600', upsert: true });
+
+    if (error) throw error;
+
+    const { data: urlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(data.path);
+
+    return urlData.publicUrl;
   },
 
   async createRelease(userId: string, releaseData: any) {
-    const colRef = collection(db, "releases");
-    return addDoc(colRef, {
-      ...releaseData,
-      userId,
-      createdAt: new Date().toISOString()
-    });
+    const { data, error } = await supabase
+      .from('releases')
+      .insert({
+        user_id: userId,
+        song_title: releaseData.songTitle,
+        genre: releaseData.genre,
+        release_date: releaseData.releaseDate,
+        pitchfork_score: releaseData.pitchforkScore ? parseFloat(releaseData.pitchforkScore) : null,
+        copyright_year: releaseData.copyrightYear,
+        copyright_holder: releaseData.copyrightHolder,
+        publishing_year: releaseData.publishingYear,
+        publishing_holder: releaseData.publishingHolder,
+        contact_email: releaseData.contactEmail,
+        support_phone: releaseData.supportPhone,
+        artwork_url: releaseData.artworkPreview,
+        audio_url: releaseData.audioUrl,
+        status: ReleaseStatus.PENDING_APPROVAL,
+        royalty_splits: releaseData.royaltySplits
+      })
+      .select();
+
+    if (error) throw error;
+    return data[0];
   },
 
   subscribeToReleases(callback: (releases: Release[]) => void, userId?: string) {
-    const colRef = collection(db, "releases");
-    const q = userId ? query(colRef, where("userId", "==", userId)) : colRef;
-    
-    return onSnapshot(q, (snapshot) => {
-      const releases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as Release));
-      callback(releases);
-    });
+    // İlk yükleme
+    const fetchInitial = async () => {
+      let query = supabase.from('releases').select('*');
+      if (userId) query = query.eq('user_id', userId);
+      
+      const { data } = await query.order('created_at', { ascending: false });
+      if (data) {
+        callback(data.map(this.mapReleaseFromDB));
+      }
+    };
+
+    fetchInitial();
+
+    // Gerçek zamanlı dinleme
+    return supabase
+      .channel('public:releases')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'releases' }, () => {
+        fetchInitial();
+      })
+      .subscribe();
+  },
+
+  mapReleaseFromDB(dbRelease: any): Release {
+    return {
+      id: dbRelease.id,
+      userId: dbRelease.user_id,
+      artistName: dbRelease.artist_name || 'Various Artists', // Veritabanı şemanıza göre güncelleyin
+      songTitle: dbRelease.song_title,
+      genre: dbRelease.genre,
+      releaseDate: dbRelease.release_date,
+      submissionDate: dbRelease.created_at,
+      pitchforkScore: dbRelease.pitchfork_score?.toString(),
+      copyrightYear: dbRelease.copyright_year,
+      copyrightHolder: dbRelease.copyright_holder,
+      publishingYear: dbRelease.publishing_year,
+      publishingHolder: dbRelease.publishing_holder,
+      producerCredits: dbRelease.producer_credits,
+      composer: dbRelease.composer,
+      lyricist: dbRelease.lyricist,
+      contactEmail: dbRelease.contact_email,
+      supportPhone: dbRelease.support_phone,
+      artworkPreview: dbRelease.artwork_url,
+      selectedServices: dbRelease.selected_services || [],
+      status: dbRelease.status,
+      royaltySplits: dbRelease.royalty_splits || [],
+      streams: dbRelease.streams || 0,
+      revenue: dbRelease.revenue || 0
+    };
   },
 
   // --- ARTISTS ---
   async addArtist(userId: string, artist: Omit<Artist, 'id'>) {
-    const colRef = collection(db, "artists");
-    return addDoc(colRef, { ...artist, userId });
+    const { error } = await supabase
+      .from('artists')
+      .insert({
+        user_id: userId,
+        name: artist.name,
+        spotify_url: artist.spotifyUrl,
+        instagram_url: artist.instagramUrl
+      });
+    if (error) throw error;
   },
 
   subscribeToArtists(userId: string, callback: (artists: Artist[]) => void) {
-    const q = query(collection(db, "artists"), where("userId", "==", userId));
-    return onSnapshot(q, (snapshot) => {
-      const artists = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as Artist));
-      callback(artists);
-    });
+    const fetchInitial = async () => {
+      const { data } = await supabase
+        .from('artists')
+        .select('*')
+        .eq('user_id', userId);
+      
+      if (data) {
+        callback(data.map(a => ({
+          id: a.id,
+          name: a.name,
+          spotifyUrl: a.spotify_url,
+          instagramUrl: a.instagram_url
+        })));
+      }
+    };
+
+    fetchInitial();
+
+    return supabase
+      .channel('public:artists')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'artists', filter: `user_id=eq.${userId}` }, () => {
+        fetchInitial();
+      })
+      .subscribe();
   },
 
   // --- TICKETS ---
   async createTicket(ticket: any) {
-    return addDoc(collection(db, "tickets"), ticket);
-  },
+    const { data, error } = await supabase
+      .from('tickets')
+      .insert({
+        user_id: ticket.userId,
+        subject: ticket.subject,
+        category: ticket.category,
+        status: 'Open'
+      })
+      .select();
 
-  subscribeToTickets(callback: (tickets: Ticket[]) => void, userId?: string) {
-    const colRef = collection(db, "tickets");
-    const q = userId ? query(colRef, where("userId", "==", userId)) : colRef;
-    
-    return onSnapshot(q, (snapshot) => {
-      const tickets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as Ticket));
-      callback(tickets);
+    if (error) throw error;
+
+    // İlk mesajı ekle
+    await supabase.from('ticket_messages').insert({
+      ticket_id: data[0].id,
+      sender_id: ticket.userId,
+      text: ticket.messages[0].text
     });
   }
 };
