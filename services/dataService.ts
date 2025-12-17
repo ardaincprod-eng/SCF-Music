@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 import { Release, Artist, User, Ticket, ReleaseStatus } from '../types';
 
 export const DataService = {
-  // --- AUTH & USER PROFILE ---
+  // --- KULLANICI PROFİLİ ---
   async syncUserProfile(user: User) {
     if (!supabase || !supabase.from) return;
     const { error } = await supabase
@@ -13,9 +13,10 @@ export const DataService = {
         name: user.name,
         email: user.email,
         role: user.role,
-        is_banned: user.isBanned || false
+        is_banned: user.isBanned || false,
+        updated_at: new Date().toISOString()
       });
-    if (error) console.error("Error syncing profile:", error);
+    if (error) console.error("Profil senkronizasyon hatası:", error);
   },
 
   async getUserRole(userId: string): Promise<'artist' | 'admin'> {
@@ -34,13 +35,16 @@ export const DataService = {
     }
   },
 
-  // --- RELEASES ---
+  // --- DOSYA YÜKLEME (Vercel/Supabase Storage) ---
   async uploadFile(file: File, bucket: string, path: string): Promise<string> {
-    if (!supabase || !supabase.storage) throw new Error("Storage not configured");
+    if (!supabase || !supabase.storage) throw new Error("Depolama yapılandırılmadı.");
     
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(path, file, { cacheControl: '3600', upsert: true });
+      .upload(path, file, { 
+        cacheControl: '3600', 
+        upsert: true 
+      });
 
     if (error) throw error;
 
@@ -51,8 +55,9 @@ export const DataService = {
     return urlData.publicUrl;
   },
 
+  // --- RELEASES (YAYINLAR) ---
   async createRelease(userId: string, releaseData: any) {
-    if (!supabase || !supabase.from) throw new Error("Database not configured");
+    if (!supabase || !supabase.from) throw new Error("Veritabanı yapılandırılmadı.");
     
     const { data, error } = await supabase
       .from('releases')
@@ -73,7 +78,8 @@ export const DataService = {
         audio_url: releaseData.audioUrl,
         status: 'Pending Approval',
         royalty_splits: releaseData.royaltySplits,
-        selected_services: releaseData.selectedServices
+        selected_services: releaseData.selectedServices,
+        created_at: new Date().toISOString()
       })
       .select();
 
@@ -90,15 +96,14 @@ export const DataService = {
       
       const { data } = await query.order('created_at', { ascending: false });
       if (data) {
-        // Explicitly call mapReleaseFromDB to avoid context issues
-        callback(data.map(item => DataService.mapReleaseFromDB(item)));
+        callback(data.map(item => this.mapReleaseFromDB(item)));
       }
     };
 
     fetchInitial();
 
     return supabase
-      .channel('public:releases')
+      .channel('releases_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'releases' }, () => {
         fetchInitial();
       })
@@ -109,7 +114,7 @@ export const DataService = {
     return {
       id: dbRelease.id,
       userId: dbRelease.user_id,
-      artistName: dbRelease.artist_name || 'Various Artists',
+      artistName: dbRelease.artist_name || 'Bilinmeyen Sanatçı',
       songTitle: dbRelease.song_title,
       genre: dbRelease.genre,
       releaseDate: dbRelease.release_date,
@@ -133,9 +138,9 @@ export const DataService = {
     };
   },
 
-  // --- ARTISTS ---
+  // --- ARTISTS (SANATÇILAR) ---
   async addArtist(userId: string, artist: Omit<Artist, 'id'>) {
-    if (!supabase || !supabase.from) throw new Error("Database not configured");
+    if (!supabase || !supabase.from) throw new Error("Veritabanı erişimi yok.");
     const { error } = await supabase
       .from('artists')
       .insert({
@@ -169,16 +174,21 @@ export const DataService = {
     fetchInitial();
 
     return supabase
-      .channel('public:artists')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'artists', filter: `user_id=eq.${userId}` }, () => {
+      .channel('artists_realtime')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'artists', 
+        filter: `user_id=eq.${userId}` 
+      }, () => {
         fetchInitial();
       })
       .subscribe();
   },
 
-  // --- TICKETS ---
+  // --- DESTEK TALEPLERİ ---
   async createTicket(ticket: any) {
-    if (!supabase || !supabase.from) throw new Error("Database not configured");
+    if (!supabase || !supabase.from) throw new Error("Veritabanı erişimi yok.");
     const { data, error } = await supabase
       .from('tickets')
       .insert({
@@ -194,7 +204,8 @@ export const DataService = {
     await supabase.from('ticket_messages').insert({
       ticket_id: data[0].id,
       sender_id: ticket.userId,
-      text: ticket.messages[0].text
+      text: ticket.messages[0].text,
+      created_at: new Date().toISOString()
     });
   }
 };

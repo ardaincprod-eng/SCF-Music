@@ -48,7 +48,7 @@ const App: React.FC = () => {
           const role = await DataService.getUserRole(session.user.id);
           const user: User = {
             id: session.user.id,
-            name: session.user.user_metadata?.name || 'Artist',
+            name: session.user.user_metadata?.name || 'Sanatçı',
             email: session.user.email || '',
             password: '',
             role: role
@@ -57,7 +57,7 @@ const App: React.FC = () => {
           await DataService.syncUserProfile(user);
         }
       } catch (err: any) {
-        console.error("Auth initialization failed:", err);
+        console.error("Kimlik doğrulama başlatılamadı:", err);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -65,18 +65,17 @@ const App: React.FC = () => {
 
     initializeAuth();
 
-    const authListener = supabase?.auth?.onAuthStateChange(async (event: string, session: any) => {
+    const { data: authListener } = supabase?.auth?.onAuthStateChange(async (event: string, session: any) => {
       if (session?.user && mounted) {
         const role = await DataService.getUserRole(session.user.id);
         const user: User = {
           id: session.user.id,
-          name: session.user.user_metadata?.name || 'Artist',
+          name: session.user.user_metadata?.name || 'Sanatçı',
           email: session.user.email || '',
           password: '',
           role: role
         };
         setCurrentUser(user);
-        // Only switch view if we are on landing/login/register
         setView(prevView => {
            if ([View.LANDING, View.LOGIN, View.REGISTER].includes(prevView)) {
              return View.PROFILE;
@@ -96,8 +95,8 @@ const App: React.FC = () => {
 
     return () => {
       mounted = false;
-      if (authListener?.data?.subscription) {
-          authListener.data.subscription.unsubscribe();
+      if (authListener?.subscription) {
+          authListener.subscription.unsubscribe();
       }
     };
   }, []);
@@ -110,7 +109,7 @@ const App: React.FC = () => {
         releaseSub = DataService.subscribeToReleases(setReleases, currentUser.role === 'admin' ? undefined : currentUser.id);
         artistSub = DataService.subscribeToArtists(currentUser.id, setArtists);
     } catch (err) {
-        console.error("Data subscription error:", err);
+        console.error("Veri abonelik hatası:", err);
     }
     return () => {
       if (releaseSub?.unsubscribe) releaseSub.unsubscribe();
@@ -146,22 +145,27 @@ const App: React.FC = () => {
       
       let audioUrl = "";
       if (releaseData.audioFile) {
-        audioUrl = await DataService.uploadFile(
-          releaseData.audioFile, 
-          'audio', 
-          `${currentUser.id}/${Date.now()}_${releaseData.audioFile.name}`
-        );
+        const audioPath = `${currentUser.id}/audio/${Date.now()}_${releaseData.audioFile.name}`;
+        audioUrl = await DataService.uploadFile(releaseData.audioFile, 'audio', audioPath);
+      }
+
+      let artworkUrl = releaseData.artworkPreview;
+      // Eğer bir File objesi varsa onu yükle (AI ile üretilmediyse)
+      if (releaseData.artworkFile) {
+         const artPath = `${currentUser.id}/artwork/${Date.now()}_${releaseData.artworkFile.name}`;
+         artworkUrl = await DataService.uploadFile(releaseData.artworkFile, 'artwork', artPath);
       }
 
       await DataService.createRelease(currentUser.id, {
         ...releaseData,
-        audioUrl
+        audioUrl,
+        artworkPreview: artworkUrl
       });
 
       setReleaseToEdit(null);
       setView(View.MY_RELEASES);
     } catch (err: any) {
-      alert("Yükleme hatası: " + err.message);
+      alert("Gönderim hatası: " + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -198,7 +202,14 @@ const App: React.FC = () => {
     <div className="min-h-screen font-sans selection:bg-indigo-500/30">
       {currentUser ? (
         <div className="flex min-h-screen bg-slate-950">
-          <Sidebar currentUser={currentUser} currentView={view} onChangeView={setView} onLogout={handleLogout} tickets={tickets} onCreateRelease={() => setView(View.FORM)} />
+          <Sidebar 
+            currentUser={currentUser} 
+            currentView={view} 
+            onChangeView={setView} 
+            onLogout={handleLogout} 
+            tickets={tickets} 
+            onCreateRelease={() => setView(View.FORM)} 
+          />
           <main className="flex-1 ml-64 p-8 overflow-y-auto min-h-screen">
             <div key={view} className="animate-fadeIn max-w-7xl mx-auto">{renderAuthView()}</div>
           </main>
