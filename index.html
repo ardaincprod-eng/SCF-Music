@@ -11,12 +11,13 @@
       // Global shims for browser compatibility
       window.process = window.process || { env: {} };
       
-      // Address the DOMException warning by ensuring it's the native one
+      // Ensure we use the platform's native DOMException
+      // If it exists (it should in all modern browsers), we don't need a polyfill.
       if (typeof window.DOMException === 'undefined') {
         window.DOMException = Error;
       }
       
-      console.log("SCF Music: System environment shims applied.");
+      console.log("SCF Music: Environment shims applied. Using native DOMException.");
       
       window.onerror = function(message, source, lineno, colno, error) {
         console.error("Global Error Caught:", message, "at", source, ":", lineno);
@@ -35,25 +36,25 @@
           <h2 style="margin-top:0">Uygulama Hatası</h2>
           <p><strong>Mesaj:</strong> ${message}</p>
           <p><strong>Yer:</strong> ${source}:${lineno}:${colno}</p>
-          <p style="margin-top: 10px; font-size: 12px;">Eğer ekran boş kalmaya devam ediyorsa, lütfen Vercel Environment Variables ayarlarınızı kontrol edin veya tarayıcı konsolunu inceleyin.</p>
+          <p style="margin-top: 10px; font-size: 12px;">Tarayıcı konsolunu (F12) kontrol ederek daha fazla detay görebilirsiniz.</p>
         `;
         document.body.appendChild(errorDiv);
         return false;
       };
     </script>
     <script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.1",
-    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.1/client",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.32.0",
-    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
-  }
-}
-</script>
+    {
+      "imports": {
+        "react": "https://aistudiocdn.com/react@^19.2.1",
+        "react-dom": "https://aistudiocdn.com/react-dom@^19.2.1",
+        "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.1/client",
+        "react/": "https://aistudiocdn.com/react@^19.2.1/",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.32.0",
+        "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm"
+      }
+    }
+    </script>
     <style>
         body {
             background-color: #020617;
