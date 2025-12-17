@@ -29,16 +29,11 @@ const App: React.FC = () => {
   const [currentRelease, setCurrentRelease] = useState<Release | null>(null);
   const [releaseToEdit, setReleaseToEdit] = useState<Release | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [initError, setInitError] = useState<string | null>(null);
 
-  // 1. Supabase Auth Takibi
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        if (!supabase || !supabase.auth) {
-           console.error("Supabase client not found.");
-           return;
-        }
+        if (!supabase || !supabase.auth) return;
 
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
@@ -54,12 +49,12 @@ const App: React.FC = () => {
             role: role
           };
           setCurrentUser(user);
-          DataService.syncUserProfile(user);
+          await DataService.syncUserProfile(user);
         }
       } catch (err: any) {
-        console.error("Auth initialization failed:", err);
-        // Do not block app for auth errors, just log them
+        console.error("Auth init failed:", err);
       } finally {
+        // Guaranteed to run, ensuring the loading screen disappears
         setIsLoading(false);
       }
     };
@@ -83,7 +78,7 @@ const App: React.FC = () => {
       } else {
         setCurrentUser(null);
         if (view !== View.LANDING && view !== View.LOGIN && view !== View.REGISTER) {
-            setView(View.LANDING);
+          setView(View.LANDING);
         }
       }
     });
@@ -95,23 +90,16 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // 2. Veri Abonelikleri
   useEffect(() => {
     if (!currentUser) return;
-
     let releaseSub: any;
     let artistSub: any;
-
     try {
-        releaseSub = DataService.subscribeToReleases(
-          setReleases, 
-          currentUser.role === 'admin' ? undefined : currentUser.id
-        );
+        releaseSub = DataService.subscribeToReleases(setReleases, currentUser.role === 'admin' ? undefined : currentUser.id);
         artistSub = DataService.subscribeToArtists(currentUser.id, setArtists);
     } catch (err) {
         console.error("Data subscription error:", err);
     }
-
     return () => {
       if (releaseSub?.unsubscribe) releaseSub.unsubscribe();
       if (artistSub?.unsubscribe) artistSub.unsubscribe();
@@ -130,7 +118,7 @@ const App: React.FC = () => {
       options: { data: { name } }
     });
     if (error) throw error;
-    alert("Kayıt başarılı! Lütfen e-posta adresinizi onaylayın.");
+    alert("Kayıt başarılı! Lütfen e-postanızı onaylayın.");
   };
 
   const handleLogout = async () => {
@@ -141,31 +129,40 @@ const App: React.FC = () => {
 
   const handleReleaseSubmit = async (releaseData: any) => {
     if (!currentUser) return;
+    try {
+      setIsLoading(true);
+      
+      let audioUrl = "";
+      if (releaseData.audioFile) {
+        audioUrl = await DataService.uploadFile(
+          releaseData.audioFile, 
+          'audio', 
+          `${currentUser.id}/${Date.now()}_${releaseData.audioFile.name}`
+        );
+      }
 
-    let audioUrl = "";
-    if (releaseData.audioFile) {
-      audioUrl = await DataService.uploadFile(
-        releaseData.audioFile, 
-        'audio', 
-        `${currentUser.id}/${Date.now()}_${releaseData.audioFile.name}`
-      );
+      await DataService.createRelease(currentUser.id, {
+        ...releaseData,
+        audioUrl
+      });
+
+      setReleaseToEdit(null);
+      setView(View.MY_RELEASES);
+    } catch (err: any) {
+      alert("Yükleme hatası: " + err.message);
+    } finally {
+      setIsLoading(false);
     }
-
-    await DataService.createRelease(currentUser.id, {
-      ...releaseData,
-      audioUrl
-    });
-
-    setView(View.MY_RELEASES);
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="flex flex-col items-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
-            <p className="text-slate-400 font-medium animate-pulse">SCF Music Başlatılıyor...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+        <div className="relative">
+          <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-xl animate-pulse"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500 relative z-10"></div>
         </div>
+        <p className="mt-6 text-slate-400 font-medium tracking-widest uppercase text-xs animate-pulse">SCF Music Hazırlanıyor...</p>
       </div>
     );
   }
@@ -186,16 +183,16 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen font-sans">
+    <div className="min-h-screen font-sans selection:bg-indigo-500/30">
       {currentUser ? (
         <div className="flex min-h-screen bg-slate-950">
           <Sidebar currentUser={currentUser} currentView={view} onChangeView={setView} onLogout={handleLogout} tickets={tickets} onCreateRelease={() => setView(View.FORM)} />
-          <main className="flex-1 ml-64 p-8 overflow-y-auto">
-            <div key={view} className="animate-fadeIn">{renderAuthView()}</div>
+          <main className="flex-1 ml-64 p-8 overflow-y-auto min-h-screen">
+            <div key={view} className="animate-fadeIn max-w-7xl mx-auto">{renderAuthView()}</div>
           </main>
         </div>
       ) : (
-        <>
+        <div className="bg-slate-950 min-h-screen">
           <Header onGoHome={() => setView(View.LANDING)} isAuthenticated={false} currentUser={null} onLoginClick={() => setView(View.LOGIN)} onLogout={handleLogout} onMyReleasesClick={() => {}} onAdminClick={() => {}} onPayoutsClick={() => {}} />
           <main className="container mx-auto px-4 py-8 md:py-16 relative z-10">
             <div key={view} className="animate-fadeIn">
@@ -204,7 +201,7 @@ const App: React.FC = () => {
                <Hero onStartRelease={() => setView(View.LOGIN)} />}
             </div>
           </main>
-        </>
+        </div>
       )}
     </div>
   );

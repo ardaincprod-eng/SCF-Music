@@ -11,10 +11,6 @@ const getEnv = (key: string): string | undefined => {
 
 const API_KEY = getEnv('API_KEY');
 
-if (!API_KEY) {
-  console.warn("API_KEY environment variable not set. AI features will be limited.");
-}
-
 const ai = new GoogleGenAI({ apiKey: API_KEY || "" });
 
 export const generatePromotionalText = async (

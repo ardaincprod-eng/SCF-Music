@@ -5,6 +5,7 @@ import { Release, Artist, User, Ticket, ReleaseStatus } from '../types';
 export const DataService = {
   // --- AUTH & USER PROFILE ---
   async syncUserProfile(user: User) {
+    if (!supabase || !supabase.from) return;
     const { error } = await supabase
       .from('profiles')
       .upsert({
@@ -18,18 +19,25 @@ export const DataService = {
   },
 
   async getUserRole(userId: string): Promise<'artist' | 'admin'> {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .single();
-    
-    if (error || !data) return 'artist';
-    return data.role;
+    if (!supabase || !supabase.from) return 'artist';
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+      
+      if (error || !data) return 'artist';
+      return data.role;
+    } catch {
+      return 'artist';
+    }
   },
 
   // --- RELEASES ---
   async uploadFile(file: File, bucket: string, path: string): Promise<string> {
+    if (!supabase || !supabase.storage) throw new Error("Storage not configured");
+    
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(path, file, { cacheControl: '3600', upsert: true });
@@ -44,11 +52,14 @@ export const DataService = {
   },
 
   async createRelease(userId: string, releaseData: any) {
+    if (!supabase || !supabase.from) throw new Error("Database not configured");
+    
     const { data, error } = await supabase
       .from('releases')
       .insert({
         user_id: userId,
         song_title: releaseData.songTitle,
+        artist_name: releaseData.artistName,
         genre: releaseData.genre,
         release_date: releaseData.releaseDate,
         pitchfork_score: releaseData.pitchforkScore ? parseFloat(releaseData.pitchforkScore) : null,
@@ -60,8 +71,9 @@ export const DataService = {
         support_phone: releaseData.supportPhone,
         artwork_url: releaseData.artworkPreview,
         audio_url: releaseData.audioUrl,
-        status: ReleaseStatus.PENDING_APPROVAL,
-        royalty_splits: releaseData.royaltySplits
+        status: 'Pending Approval',
+        royalty_splits: releaseData.royaltySplits,
+        selected_services: releaseData.selectedServices
       })
       .select();
 
@@ -70,7 +82,8 @@ export const DataService = {
   },
 
   subscribeToReleases(callback: (releases: Release[]) => void, userId?: string) {
-    // İlk yükleme
+    if (!supabase || !supabase.from) return { unsubscribe: () => {} };
+
     const fetchInitial = async () => {
       let query = supabase.from('releases').select('*');
       if (userId) query = query.eq('user_id', userId);
@@ -83,7 +96,6 @@ export const DataService = {
 
     fetchInitial();
 
-    // Gerçek zamanlı dinleme
     return supabase
       .channel('public:releases')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'releases' }, () => {
@@ -96,7 +108,7 @@ export const DataService = {
     return {
       id: dbRelease.id,
       userId: dbRelease.user_id,
-      artistName: dbRelease.artist_name || 'Various Artists', // Veritabanı şemanıza göre güncelleyin
+      artistName: dbRelease.artist_name || 'Various Artists',
       songTitle: dbRelease.song_title,
       genre: dbRelease.genre,
       releaseDate: dbRelease.release_date,
@@ -113,7 +125,7 @@ export const DataService = {
       supportPhone: dbRelease.support_phone,
       artworkPreview: dbRelease.artwork_url,
       selectedServices: dbRelease.selected_services || [],
-      status: dbRelease.status,
+      status: dbRelease.status as any,
       royaltySplits: dbRelease.royalty_splits || [],
       streams: dbRelease.streams || 0,
       revenue: dbRelease.revenue || 0
@@ -122,6 +134,7 @@ export const DataService = {
 
   // --- ARTISTS ---
   async addArtist(userId: string, artist: Omit<Artist, 'id'>) {
+    if (!supabase || !supabase.from) throw new Error("Database not configured");
     const { error } = await supabase
       .from('artists')
       .insert({
@@ -134,6 +147,8 @@ export const DataService = {
   },
 
   subscribeToArtists(userId: string, callback: (artists: Artist[]) => void) {
+    if (!supabase || !supabase.from) return { unsubscribe: () => {} };
+
     const fetchInitial = async () => {
       const { data } = await supabase
         .from('artists')
@@ -162,6 +177,7 @@ export const DataService = {
 
   // --- TICKETS ---
   async createTicket(ticket: any) {
+    if (!supabase || !supabase.from) throw new Error("Database not configured");
     const { data, error } = await supabase
       .from('tickets')
       .insert({
@@ -174,7 +190,6 @@ export const DataService = {
 
     if (error) throw error;
 
-    // İlk mesajı ekle
     await supabase.from('ticket_messages').insert({
       ticket_id: data[0].id,
       sender_id: ticket.userId,
