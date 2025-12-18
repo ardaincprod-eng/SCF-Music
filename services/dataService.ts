@@ -1,206 +1,145 @@
 import { Release, Artist, User, Ticket, ReleaseStatus } from '../types.ts';
 
-const API_BASE = '/api';
-
-const getLocal = (key: string) => {
-    const data = localStorage.getItem(`scf_${key}`);
-    return data ? JSON.parse(data) : null;
-};
-
-const setLocal = (key: string, data: any) => {
-    localStorage.setItem(`scf_${key}`, JSON.stringify(data));
+// Helper to manage localStorage
+const storage = {
+    get: (key: string) => {
+        const data = localStorage.getItem(`scf_${key}`);
+        return data ? JSON.parse(data) : null;
+    },
+    set: (key: string, data: any) => {
+        localStorage.setItem(`scf_${key}`, JSON.stringify(data));
+    }
 };
 
 export const DataService = {
-  async request(endpoint: string, options: RequestInit = {}) {
-    try {
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers: { 'Content-Type': 'application/json', ...options.headers },
-      });
-      if (!response.ok) return null;
-      return await response.json();
-    } catch (error) {
-      console.warn(`Veritabanı bağlantısı kurulamadı: ${endpoint}`);
-      return null;
-    }
-  },
-
+  // User Operations
   async syncUserProfile(user: User) {
-    setLocal('current_user', user);
-    return this.request('/users/sync', { 
-        method: 'POST', 
-        body: JSON.stringify(user) 
-    });
+    storage.set('user', user);
+    return user;
   },
 
   async getUserRole(userId: string): Promise<'artist' | 'admin'> {
-    const data = await this.request(`/users/role?id=${userId}`);
-    if (data?.role) return data.role;
-    const localUser = getLocal('current_user');
-    return localUser?.role || 'artist';
+    const user = storage.get('user');
+    if (user && user.id === userId) return user.role;
+    return 'artist';
   },
 
+  // Release Operations
   async createRelease(userId: string, releaseData: any) {
-    const tempId = Math.random().toString(36).substr(2, 9);
-    const newRelease = { 
-        id: tempId,
-        user_id: userId,
-        artist_name: releaseData.artistName,
-        song_title: releaseData.songTitle,
-        genre: releaseData.genre,
-        release_date: releaseData.releaseDate,
-        artwork_url: releaseData.artworkPreview,
-        selected_services: releaseData.selectedServices,
-        royalty_splits: releaseData.royaltySplits,
-        copyright_year: releaseData.copyrightYear,
-        copyright_holder: releaseData.copyrightHolder,
-        publishing_year: releaseData.publishingYear,
-        publishing_holder: releaseData.publishingHolder,
-        producer_credits: releaseData.producerCredits,
-        composer: releaseData.composer,
-        lyricist: releaseData.lyricist,
-        contact_email: releaseData.contactEmail,
-        support_phone: releaseData.supportPhone,
-        status: ReleaseStatus.PENDING_APPROVAL
+    const releases = await this.getReleases();
+    const newRelease: Release = {
+        ...releaseData,
+        id: 'REL' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+        userId: userId,
+        status: ReleaseStatus.PENDING_APPROVAL,
+        submissionDate: new Date().toISOString(),
+        streams: 0,
+        revenue: 0,
+        royaltySplits: releaseData.royaltySplits || []
     };
-    
-    const currentReleases = getLocal(`releases_${userId}`) || [];
-    setLocal(`releases_${userId}`, [this.mapReleaseFromDB(newRelease), ...currentReleases]);
-    
-    return this.request('/releases', { 
-        method: 'POST', 
-        body: JSON.stringify(newRelease) 
-    });
+    storage.set('releases', [newRelease, ...releases]);
+    return newRelease;
   },
 
   async getReleases(userId?: string): Promise<Release[]> {
-    const endpoint = userId ? `/releases?userId=${userId}` : '/releases';
-    const data = await this.request(endpoint);
-    
-    if (data && Array.isArray(data)) {
-        const mapped = data.map(r => this.mapReleaseFromDB(r));
-        if (userId) setLocal(`releases_${userId}`, mapped);
-        return mapped;
+    const releases: Release[] = storage.get('releases') || [];
+    if (userId) {
+        return releases.filter(r => r.userId === userId);
     }
-    return userId ? (getLocal(`releases_${userId}`) || []) : [];
+    return releases;
   },
 
-  mapReleaseFromDB(db: any): Release {
-    return {
-      id: db.id,
-      userId: db.user_id || db.userId,
-      artistName: db.artist_name || db.artistName || 'Bilinmiyor',
-      songTitle: db.song_title || db.songTitle || 'İsimsiz',
-      genre: db.genre || 'Pop',
-      releaseDate: db.release_date || db.releaseDate,
-      submissionDate: db.created_at || db.submissionDate || new Date().toISOString(),
-      artworkPreview: db.artwork_url || db.artworkPreview,
-      status: (db.status as any) || ReleaseStatus.PENDING_APPROVAL,
-      // Fixed: Removed incorrect 'royalty_splits' property (line 100) that was causing type errors
-      streams: parseInt(db.streams) || 0,
-      revenue: parseFloat(db.revenue) || 0,
-      selectedServices: db.selected_services || [],
-      copyrightYear: db.copyright_year || '',
-      copyrightHolder: db.copyright_holder || '',
-      publishingYear: db.publishing_year || '',
-      publishingHolder: db.publishing_holder || '',
-      producerCredits: db.producer_credits || '',
-      composer: db.composer || '',
-      lyricist: db.lyricist || '',
-      contactEmail: db.contact_email || '',
-      supportPhone: db.support_phone || '',
-      artists: db.artists || [],
-      royaltySplits: db.royalty_splits || []
-    };
+  // Artist Operations
+  async getArtists(userId: string): Promise<Artist[]> {
+    const artists: Artist[] = storage.get('artists') || [];
+    return artists.filter((a: any) => a.userId === userId);
   },
 
   async addArtist(userId: string, artist: Omit<Artist, 'id'>) {
-    const tempId = Math.random().toString(36).substr(2, 5);
-    const newArtist = { 
-        id: tempId, 
-        user_id: userId,
-        name: artist.name,
-        spotify_url: artist.spotifyUrl,
-        instagram_url: artist.instagramUrl
+    const artists = storage.get('artists') || [];
+    const newArtist = {
+        ...artist,
+        id: 'ART' + Math.random().toString(36).substr(2, 4).toUpperCase(),
+        userId: userId
     };
-    const currentArtists = getLocal(`artists_${userId}`) || [];
-    setLocal(`artists_${userId}`, [{
-        id: tempId,
-        name: artist.name,
-        spotifyUrl: artist.spotifyUrl,
-        instagramUrl: artist.instagramUrl
-    }, ...currentArtists]);
-    
-    return this.request('/artists', { method: 'POST', body: JSON.stringify(newArtist) });
+    storage.set('artists', [newArtist, ...artists]);
+    return newArtist;
   },
 
-  async getArtists(userId: string): Promise<Artist[]> {
-    const data = await this.request(`/artists?userId=${userId}`);
-    if (data && Array.isArray(data)) {
-        return data.map(a => ({
-            id: a.id,
-            name: a.name,
-            spotifyUrl: a.spotify_url || a.spotifyUrl,
-            instagramUrl: a.instagram_url || a.instagramUrl
-        }));
-    }
-    return getLocal(`artists_${userId}`) || [];
-  },
-
+  // Subscription simulation (Local storage doesn't need real subs, but we keep the interface)
   subscribeToReleases(callback: (releases: Release[]) => void, userId?: string) {
-    const interval = setInterval(async () => {
-      const data = await this.getReleases(userId);
-      callback(data);
-    }, 15000);
+    const check = async () => {
+        const data = await this.getReleases(userId);
+        callback(data);
+    };
+    const interval = setInterval(check, 5000);
+    check();
     return { unsubscribe: () => clearInterval(interval) };
   },
 
   subscribeToArtists(userId: string, callback: (artists: Artist[]) => void) {
-    const interval = setInterval(async () => {
-      const data = await this.getArtists(userId);
-      callback(data);
-    }, 30000);
+    const check = async () => {
+        const data = await this.getArtists(userId);
+        callback(data);
+    };
+    const interval = setInterval(check, 5000);
+    check();
     return { unsubscribe: () => clearInterval(interval) };
   },
 
+  // Ticket Operations
   async getTickets(userId?: string): Promise<Ticket[]> {
-    const data = await this.request(userId ? `/tickets?userId=${userId}` : '/tickets');
-    if (data && Array.isArray(data)) {
-        return data.map(t => ({
-            id: t.id,
-            userId: t.user_id,
-            userName: t.user_name,
-            subject: t.subject,
-            category: t.category,
-            status: t.status,
-            lastUpdated: t.last_updated,
-            readByArtist: t.read_by_artist,
-            readByAdmin: t.read_by_admin,
-            messages: (t.messages || []).map((m: any) => ({
-                id: m.id,
-                senderId: m.sender_id,
-                senderName: m.sender_name,
-                text: m.text,
-                date: m.created_at,
-                isAdmin: m.is_admin
-            }))
-        }));
-    }
-    return [];
+    const tickets: Ticket[] = storage.get('tickets') || [];
+    if (userId) return tickets.filter(t => t.userId === userId);
+    return tickets;
   },
 
   async createTicket(userId: string, userName: string, subject: string, category: string, message: string) {
-    return this.request('/tickets', {
-        method: 'POST',
-        body: JSON.stringify({ user_id: userId, user_name: userName, subject, category, message_text: message })
-    });
+    const tickets = await this.getTickets();
+    const newTicket: Ticket = {
+        id: 'TCK' + Math.random().toString(36).substr(2, 5).toUpperCase(),
+        userId,
+        userName,
+        subject,
+        category,
+        status: 'Open',
+        lastUpdated: new Date().toISOString(),
+        readByArtist: true,
+        readByAdmin: false,
+        messages: [{
+            id: 'MSG' + Date.now(),
+            senderId: userId,
+            senderName: userName,
+            text: message,
+            date: new Date().toISOString(),
+            isAdmin: false
+        }]
+    };
+    storage.set('tickets', [newTicket, ...tickets]);
+    return newTicket;
   },
 
   async replyTicket(ticketId: string, senderId: string, senderName: string, text: string, isAdmin: boolean) {
-    return this.request(`/tickets/${ticketId}/reply`, {
-        method: 'POST',
-        body: JSON.stringify({ sender_id: senderId, sender_name: senderName, text, is_admin: isAdmin })
+    const tickets = await this.getTickets();
+    const updatedTickets = tickets.map(t => {
+        if (t.id === ticketId) {
+            return {
+                ...t,
+                lastUpdated: new Date().toISOString(),
+                readByArtist: !isAdmin,
+                readByAdmin: isAdmin,
+                messages: [...t.messages, {
+                    id: 'MSG' + Date.now(),
+                    senderId,
+                    senderName,
+                    text,
+                    date: new Date().toISOString(),
+                    isAdmin
+                }]
+            };
+        }
+        return t;
     });
+    storage.set('tickets', updatedTickets);
   }
 };
