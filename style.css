@@ -1,57 +1,7 @@
 
-body {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-}
-
-.view {
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.view.hidden {
-    display: none;
-    opacity: 0;
-    transform: translateY(10px);
-}
-
-.view.active {
-    display: block;
-    opacity: 1;
-    transform: translateY(0);
-}
-
-.dash-btn {
-    width: 100%;
-    text-align: left;
-    padding: 1rem 1.5rem;
-    border-radius: 1rem;
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: #64748b;
-    transition: all 0.2s;
-}
-
-.dash-btn:hover {
-    color: white;
-    background: rgba(255,255,255,0.05);
-}
-
-.dash-btn.active {
-    color: #6366f1;
-    background: rgba(99, 102, 241, 0.1);
-}
-
-input::placeholder {
-    color: #334155;
-}
-
-/* Scrollbar */
-::-webkit-scrollbar {
-    width: 6px;
-}
-::-webkit-scrollbar-track {
-    background: #020617;
-}
-::-webkit-scrollbar-thumb {
-    background: #1e293b;
-    border-radius: 10px;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Plus Jakarta Sans', sans-serif; overflow-x: hidden; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #020617; }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #334155; }

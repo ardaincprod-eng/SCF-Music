@@ -1,2 +1,1 @@
-
-// Bu dosya içeriği React mimarisine (App.tsx) taşındığı için boşaltılmıştır.
+// SCF Musicana v3 - React logic moved to App.tsx

@@ -1,189 +1,148 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, User, Release, Artist } from './types.ts';
-import { DataService } from './services/dataService.ts';
-import { Hero } from './components/Hero.tsx';
-import { Header } from './components/Header.tsx';
-import { Sidebar } from './components/Sidebar.tsx';
-import { UserProfile } from './components/UserProfile.tsx';
-import { Login } from './components/Login.tsx';
-import { Register } from './components/Register.tsx';
-import { ReleaseForm } from './components/ReleaseForm.tsx';
-import { MyReleases } from './components/MyReleases.tsx';
-import { Artists } from './components/Artists.tsx';
-import { Payouts } from './components/Payouts.tsx';
-import { Cards } from './components/Cards.tsx';
-import { Tickets } from './components/Tickets.tsx';
-import { AdminDashboard } from './components/AdminDashboard.tsx';
-import { Dashboard } from './components/Dashboard.tsx';
 
-const App: React.FC = () => {
-  const [view, setView] = useState<View>(View.LANDING);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+// --- Types ---
+type View = 'landing' | 'login' | 'dashboard' | 'release';
+interface User { email: string; id: string; }
+interface Release { id: number; song_title: string; artist_name: string; created_at: string; }
+
+export default function App() {
+  const [view, setView] = useState<View>('landing');
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
   const [releases, setReleases] = useState<Release[]>([]);
-  const [artists, setArtists] = useState<Artist[]>([]);
-  const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
 
+  // Auth check
   useEffect(() => {
-    const initApp = async () => {
-      try {
-        const savedAuth = localStorage.getItem('scf_auth');
-        if (savedAuth) {
-          const user = JSON.parse(savedAuth);
-          setCurrentUser(user);
-          
-          const [userReleases, userArtists] = await Promise.all([
-            DataService.getReleases(user.id),
-            DataService.getArtists(user.id)
-          ]);
-          setReleases(userReleases || []);
-          setArtists(userArtists || []);
-          setView(View.PROFILE);
-        }
-      } catch (err) {
-        console.error("Uygulama başlatma hatası:", err);
-      } finally {
-        // Loader'ın takılı kalmaması için her durumda false yapıyoruz
-        setTimeout(() => setIsLoading(false), 800);
-      }
-    };
-    initApp();
+    const saved = localStorage.getItem('musicana_auth');
+    if (saved) {
+      setUser(JSON.parse(saved));
+      setView('dashboard');
+    }
   }, []);
 
-  const handleLogin = async (email: string) => {
-    setIsLoading(true);
+  // Fetch from Neon DB (via Netlify Functions)
+  const fetchReleases = async (userId: string) => {
     try {
-      const user: User = {
-        id: btoa(email).slice(0, 10),
-        name: email.split('@')[0].toUpperCase(),
-        email,
-        role: email.includes('admin') ? 'admin' : 'artist'
-      };
-      setCurrentUser(user);
-      localStorage.setItem('scf_auth', JSON.stringify(user));
-      
-      const [r, a] = await Promise.all([
-          DataService.getReleases(user.id),
-          DataService.getArtists(user.id)
-      ]);
-      setReleases(r || []);
-      setArtists(a || []);
-      setView(View.PROFILE);
-    } finally {
-      setIsLoading(false);
+      const res = await fetch(`/.netlify/functions/getData?userId=${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setReleases(data);
+      }
+    } catch (err) {
+      console.error("Veri çekme hatası:", err);
     }
+  };
+
+  useEffect(() => {
+    if (user) fetchReleases(user.id);
+  }, [user]);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = (e.target as any).email.value;
+    const userData = { email, id: btoa(email).slice(0, 8) };
+    setUser(userData);
+    localStorage.setItem('musicana_auth', JSON.stringify(userData));
+    setView('dashboard');
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('scf_auth');
-    setCurrentUser(null);
-    setView(View.LANDING);
+    localStorage.removeItem('musicana_auth');
+    setUser(null);
+    setView('landing');
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#020617] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-6 animate-fade-in">
-            <div className="relative">
-                <div className="w-16 h-16 border-4 border-indigo-500/10 rounded-full"></div>
-                <div className="absolute top-0 left-0 w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            <div className="text-center">
-                <p className="text-indigo-400 font-black tracking-[0.3em] text-xl animate-pulse">SCF MUSIC</p>
-                <p className="text-slate-600 text-[10px] mt-2 font-bold uppercase tracking-widest">Sistem Hazırlanıyor...</p>
-            </div>
-        </div>
-      </div>
-    );
-  }
-
-  const renderContent = () => {
-    if (!currentUser) {
-      if (view === View.LOGIN) return <Login onLogin={handleLogin} onSwitchToRegister={() => setView(View.REGISTER)} />;
-      if (view === View.REGISTER) return <Register onRegister={async (n,e) => handleLogin(e)} onSwitchToLogin={() => setView(View.LOGIN)} />;
-      return <Hero onStartRelease={() => setView(View.LOGIN)} />;
-    }
-
-    switch (view) {
-      case View.PROFILE: 
-        return <UserProfile 
-          currentUser={currentUser} 
-          releases={releases} 
-          onCreateRelease={() => setView(View.FORM)} 
-          onViewRelease={(r) => { setSelectedRelease(r); setView(View.DASHBOARD); }} 
-        />;
-      case View.FORM: 
-        return <ReleaseForm 
-          onSubmit={async (d) => { 
-            await DataService.createRelease(currentUser.id, d); 
-            setReleases(await DataService.getReleases(currentUser.id)); 
-            setView(View.MY_RELEASES); 
-          }} 
-          existingArtists={artists} 
-        />;
-      case View.MY_RELEASES: 
-        return <MyReleases 
-          releases={releases} 
-          onViewDashboard={(r) => { setSelectedRelease(r); setView(View.DASHBOARD); }} 
-        />;
-      case View.DASHBOARD:
-        return selectedRelease ? <Dashboard release={selectedRelease} onBackToReleases={() => setView(View.MY_RELEASES)} /> : <UserProfile currentUser={currentUser} releases={releases} onCreateRelease={() => setView(View.FORM)} onViewRelease={(r) => { setSelectedRelease(r); setView(View.DASHBOARD); }} />;
-      case View.ARTISTS: 
-        return <Artists 
-          artists={artists} 
-          onAddArtist={async (a) => { 
-            await DataService.addArtist(currentUser.id, a.name); 
-            setArtists(await DataService.getArtists(currentUser.id)); 
-          }} 
-          onDeleteArtist={() => {}} 
-        />;
-      case View.PAYOUTS: return <Payouts releases={releases} />;
-      case View.CARDS: return <Cards userId={currentUser.id} />;
-      case View.TICKETS: return <Tickets tickets={[]} currentUser={currentUser} onCreateTicket={() => {}} onReplyTicket={() => {}} onMarkAsRead={() => {}} />;
-      case View.ADMIN: return <AdminDashboard releases={releases} users={[]} tickets={[]} onApprove={() => {}} onReject={() => {}} onUpdateFinancials={() => {}} onUpdateUser={() => {}} onReplyTicket={() => {}} onUpdateTicketStatus={() => {}} onMarkAsRead={() => {}} onBanUser={() => {}} />;
-      default: return <UserProfile currentUser={currentUser} releases={releases} onCreateRelease={() => setView(View.FORM)} onViewRelease={(r) => { setSelectedRelease(r); setView(View.DASHBOARD); }} />;
-    }
-  };
-
-  return (
-    <div className="min-h-screen text-slate-200 selection:bg-indigo-500/30">
-      {!currentUser && (
-        <Header 
-          onGoHome={() => setView(View.LANDING)} 
-          isAuthenticated={false} 
-          currentUser={null} 
-          onLoginClick={() => setView(View.LOGIN)} 
-          onLogout={handleLogout} 
-          onMyReleasesClick={() => {}} 
-          onAdminClick={() => {}} 
-          onPayoutsClick={() => {}} 
-        />
-      )}
-      
-      <div className={currentUser ? "flex" : ""}>
-        {currentUser && (
-          <Sidebar 
-            currentUser={currentUser} 
-            currentView={view} 
-            onChangeView={setView} 
-            onLogout={handleLogout} 
-            onCreateRelease={() => setView(View.FORM)} 
-          />
-        )}
-        <main className={currentUser ? "flex-1 ml-0 md:ml-64 p-4 md:p-8 pt-20 md:pt-8" : ""}>
-          {renderContent()}
-        </main>
-      </div>
-      
-      {currentUser && (
-        <div className="fixed bottom-4 right-4 z-[60] bg-slate-900/80 backdrop-blur-md border border-white/5 px-3 py-1.5 rounded-full text-[10px] font-bold text-slate-500 flex items-center gap-2">
-            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-            SCF NETWORK ONLINE
-        </div>
-      )}
+  // --- Components ---
+  const Landing = () => (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-accent/20 rounded-full blur-[120px] -z-10 animate-pulse-slow"></div>
+      <h1 className="text-7xl font-black tracking-tighter mb-4 bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-white to-cyan-400">
+        SCF MUSICANA
+      </h1>
+      <p className="text-slate-400 max-w-lg text-lg mb-10 leading-relaxed">
+        Müziğinizi sınırların ötesine taşıyın. Spotify, Apple Music ve 150+ platformda yerinizi alın.
+      </p>
+      <button 
+        onClick={() => setView('login')}
+        className="px-10 py-4 bg-accent hover:bg-indigo-500 text-white font-bold rounded-full transition-all hover:scale-105 shadow-[0_0_30px_rgba(99,102,241,0.4)]"
+      >
+        Hemen Başla
+      </button>
     </div>
   );
-};
 
-export default App;
+  const Login = () => (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="w-full max-w-md bg-surface/50 p-10 rounded-[2rem] border border-white/5 backdrop-blur-2xl shadow-2xl">
+        <h2 className="text-3xl font-bold mb-8 text-center">Sanatçı Girişi</h2>
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">E-POSTA ADRESİ</label>
+            <input name="email" type="email" required className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-accent transition-all text-white" />
+          </div>
+          <button type="submit" className="w-full py-4 bg-accent rounded-xl font-bold text-white shadow-lg">Panele Eriş</button>
+        </form>
+      </div>
+    </div>
+  );
+
+  const Dashboard = () => (
+    <div className="min-h-screen p-8 max-w-6xl mx-auto">
+      <header className="flex justify-between items-center mb-16">
+        <div>
+          <h2 className="text-3xl font-black text-white">Panel</h2>
+          <p className="text-slate-500 text-sm font-medium">{user?.email}</p>
+        </div>
+        <div className="flex gap-4">
+          <button onClick={() => setView('release')} className="px-6 py-2 bg-accent rounded-lg font-bold text-sm">+ Yeni Yayın</button>
+          <button onClick={handleLogout} className="px-4 py-2 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg text-sm font-bold transition-all">Çıkış</button>
+        </div>
+      </header>
+
+      <div className="grid gap-6">
+        <h3 className="text-lg font-bold flex items-center gap-2">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+            Aktif Yayınlar (Neon DB)
+        </h3>
+        {releases.length === 0 ? (
+          <div className="p-20 border border-dashed border-white/5 rounded-3xl text-center text-slate-600">
+            Henüz veritabanında yayınlanan bir eseriniz bulunmuyor.
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-4">
+            {releases.map(r => (
+              <div key={r.id} className="bg-surface/40 p-6 rounded-2xl border border-white/5 hover:border-accent/30 transition-all flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-white text-lg">{r.song_title}</h4>
+                  <p className="text-sm text-slate-500">{r.artist_name}</p>
+                </div>
+                <span className="text-[10px] font-black bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded-md uppercase tracking-tighter">Aktif</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen text-slate-200">
+      {view === 'landing' && <Landing />}
+      {view === 'login' && <Login />}
+      {view === 'dashboard' && <Dashboard />}
+      {view === 'release' && (
+        <div className="min-h-screen flex items-center justify-center">
+            <p className="text-slate-500 font-bold uppercase tracking-widest animate-pulse">Yayın Formu Hazırlanıyor...</p>
+            <button onClick={() => setView('dashboard')} className="fixed top-8 left-8 text-slate-500">← Geri</button>
+        </div>
+      )}
+      
+      {/* Network Status */}
+      <div className="fixed bottom-6 right-6 flex items-center gap-3 px-4 py-2 bg-slate-900/80 backdrop-blur-md rounded-full border border-white/5 text-[10px] font-bold tracking-widest text-slate-500">
+        <div className="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+        SCF NETWORK ONLINE
+      </div>
+    </div>
+  );
+}

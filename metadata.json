@@ -1,6 +1,6 @@
 {
-  "name": "SCF Music",
-  "description": "scfmusic.com.tr - Profesyonel Müzik Dağıtım Platformu. Sanatçıların şarkılarını küresel mağazalara ulaştıran güvenli altyapı.",
-  "url": "https://scfmusic.com.tr",
+  "name": "SCF Musicana",
+  "description": "Profesyonel Müzik Dağıtım Platformu. Neon PostgreSQL ve React 19 Altyapısı.",
+  "url": "https://scfmusicana.com.tr",
   "requestFramePermissions": []
 }

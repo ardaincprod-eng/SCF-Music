@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Release, RoyaltySplit, StreamingService, Artist, ReleaseArtist } from '../types.ts';
 import { 
@@ -45,6 +46,11 @@ export const ReleaseForm: React.FC<ReleaseFormProps> = ({ onSubmit, existingArti
         { collaboratorName: 'Ben', role: 'Sanatçı', share: 100 }
     ]);
 
+    // New metadata fields
+    const [copyrightYear, setCopyrightYear] = useState(new Date().getFullYear().toString());
+    const [copyrightHolder, setCopyrightHolder] = useState('');
+    const [producerCredits, setProducerCredits] = useState('');
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if(!songTitle || !releaseDate || !artworkPreview) {
@@ -60,13 +66,13 @@ export const ReleaseForm: React.FC<ReleaseFormProps> = ({ onSubmit, existingArti
             artworkPreview,
             selectedServices,
             royaltySplits,
-            copyrightYear: new Date().getFullYear().toString(),
-            copyrightHolder: releaseArtists[0].name,
+            copyrightYear: copyrightYear || new Date().getFullYear().toString(),
+            copyrightHolder: copyrightHolder || releaseArtists[0].name,
             publishingYear: new Date().getFullYear().toString(),
             publishingHolder: 'SCF Music Distribution',
             contactEmail: 'support@scfmusic.com',
             supportPhone: '',
-            producerCredits: '',
+            producerCredits,
             composer: '',
             lyricist: '',
             artists: releaseArtists
@@ -104,7 +110,48 @@ export const ReleaseForm: React.FC<ReleaseFormProps> = ({ onSubmit, existingArti
                     </div>
                 </div>
 
-                <div>
+                <div className="pt-4 border-t border-white/5 space-y-6">
+                    <h3 className="text-lg font-bold text-white flex items-center">
+                        <InformationCircleIcon className="h-5 w-5 mr-2 text-indigo-400" />
+                        Telif ve Künye Bilgileri
+                    </h3>
+                    
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-2">Telif Yılı (C Year)</label>
+                            <input 
+                                type="text" 
+                                value={copyrightYear} 
+                                onChange={e => setCopyrightYear(e.target.value)} 
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500" 
+                                placeholder="Örn: 2024"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-2">Telif Sahibi (C Holder)</label>
+                            <input 
+                                type="text" 
+                                value={copyrightHolder} 
+                                onChange={e => setCopyrightHolder(e.target.value)} 
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500" 
+                                placeholder="Örn: Sanatçı veya Şirket Adı"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-400 mb-2">Yapımcı Künyesi (Producer Credits)</label>
+                        <input 
+                            type="text" 
+                            value={producerCredits} 
+                            onChange={e => setProducerCredits(e.target.value)} 
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500" 
+                            placeholder="Müzik prodüksiyonunda emeği geçenler"
+                        />
+                    </div>
+                </div>
+
+                <div className="pt-4 border-t border-white/5">
                     <label className="block text-sm font-medium text-slate-400 mb-2">Kapak Görseli URL</label>
                     <input type="text" value={artworkPreview} onChange={e => setArtworkPreview(e.target.value)} placeholder="https://..." className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-indigo-500" required />
                 </div>
