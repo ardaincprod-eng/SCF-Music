@@ -1,5 +1,6 @@
 {
   "name": "SCF Music",
-  "description": "A modern web application for artists to distribute their music to major streaming platforms. This app features an intuitive upload process and AI-powered tools to generate promotional content.",
+  "description": "scfmusic.com.tr - Profesyonel Müzik Dağıtım Platformu. Sanatçıların şarkılarını küresel mağazalara ulaştıran güvenli altyapı.",
+  "url": "https://scfmusic.com.tr",
   "requestFramePermissions": []
 }
