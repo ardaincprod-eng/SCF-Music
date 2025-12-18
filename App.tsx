@@ -1,72 +1,67 @@
+
 import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header.tsx';
-import { Hero } from './components/Hero.tsx';
-import { ReleaseForm } from './components/ReleaseForm.tsx';
-import { Dashboard } from './components/Dashboard.tsx';
-import { Login } from './components/Login.tsx';
-import { Register } from './components/Register.tsx';
-import { MyReleases } from './components/MyReleases.tsx';
-import { AdminDashboard } from './components/AdminDashboard.tsx';
-import { Payouts } from './components/Payouts.tsx';
-import { Sidebar } from './components/Sidebar.tsx';
-import { UserProfile } from './components/UserProfile.tsx';
-import { Artists } from './components/Artists.tsx';
-import { Tickets } from './components/Tickets.tsx';
-import { Cards } from './components/Cards.tsx';
-import { Release, View, User, Artist, Ticket } from './types.ts';
-import { DataService } from './services/dataService.ts';
+import { View, User, Release, Artist, Ticket } from './types';
+import { DataService } from './services/dataService';
+import { Hero } from './components/Hero';
+import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
+import { UserProfile } from './components/UserProfile';
+import { Login } from './components/Login';
+import { Register } from './components/Register';
+import { ReleaseForm } from './components/ReleaseForm';
+import { MyReleases } from './components/MyReleases';
+import { Artists } from './components/Artists';
+import { Payouts } from './components/Payouts';
+import { Cards } from './components/Cards';
+import { Tickets } from './components/Tickets';
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>(View.LANDING);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [releases, setReleases] = useState<Release[]>([]);
   const [artists, setArtists] = useState<Artist[]>([]);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentRelease, setCurrentRelease] = useState<Release | null>(null);
 
-  // Oturum Kontrolü
   useEffect(() => {
-    const saved = localStorage.getItem('scf_auth');
-    if (saved) {
-      const user = JSON.parse(saved);
-      setCurrentUser(user);
-      setView(View.PROFILE);
-    }
-    setIsLoading(false);
+    const initApp = async () => {
+      try {
+        const savedAuth = localStorage.getItem('scf_auth');
+        if (savedAuth) {
+          const user = JSON.parse(savedAuth);
+          setCurrentUser(user);
+          setView(View.PROFILE);
+          
+          const [userReleases, userArtists] = await Promise.all([
+            DataService.getReleases(user.id),
+            DataService.getArtists(user.id)
+          ]);
+          setReleases(userReleases);
+          setArtists(userArtists);
+        }
+      } catch (err) {
+        console.error("Auth init error", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    initApp();
   }, []);
 
-  // Veri Senkronizasyonu
-  useEffect(() => {
-    if (!currentUser) return;
-    
-    const releaseSub = DataService.subscribeToReleases(setReleases, currentUser.role === 'admin' ? undefined : currentUser.id);
-    const artistSub = DataService.subscribeToArtists(currentUser.id, setArtists);
-    
-    // Biletleri periyodik kontrol et
-    const tktInterval = setInterval(async () => {
-        const data = await DataService.getTickets(currentUser.role === 'admin' ? undefined : currentUser.id);
-        setTickets(data);
-    }, 3000);
-
-    return () => {
-      releaseSub.unsubscribe();
-      artistSub.unsubscribe();
-      clearInterval(tktInterval);
-    };
-  }, [currentUser]);
-
-  const handleLogin = async (email: string, password: string) => {
-    const role = email.includes('admin') ? 'admin' : 'artist';
-    const user: User = { 
-        id: btoa(email).slice(0, 8), 
-        name: email.split('@')[0].toUpperCase(), 
-        email, 
-        role 
+  const handleLogin = async (email: string) => {
+    const user: User = {
+      id: btoa(email).slice(0, 10),
+      name: email.split('@')[0].toUpperCase(),
+      email,
+      role: email.includes('admin') ? 'admin' : 'artist'
     };
     setCurrentUser(user);
     localStorage.setItem('scf_auth', JSON.stringify(user));
-    await DataService.syncUserProfile(user);
+    const [r, a] = await Promise.all([
+        DataService.getReleases(user.id),
+        DataService.getArtists(user.id)
+    ]);
+    setReleases(r);
+    setArtists(a);
     setView(View.PROFILE);
   };
 
@@ -79,45 +74,43 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#020617] flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-indigo-400 font-bold tracking-widest animate-pulse">SCF MUSIC</p>
+        </div>
       </div>
     );
   }
 
-  const renderView = () => {
+  const renderContent = () => {
     if (!currentUser) {
-      if (view === View.REGISTER) return <Register onRegister={async (n,e,p) => handleLogin(e,p)} onSwitchToLogin={() => setView(View.LOGIN)} />;
       if (view === View.LOGIN) return <Login onLogin={handleLogin} onSwitchToRegister={() => setView(View.REGISTER)} />;
+      if (view === View.REGISTER) return <Register onRegister={async (n,e) => handleLogin(e)} onSwitchToLogin={() => setView(View.LOGIN)} />;
       return <Hero onStartRelease={() => setView(View.LOGIN)} />;
     }
 
     switch (view) {
-      case View.PROFILE: return <UserProfile currentUser={currentUser} releases={releases} onCreateRelease={() => setView(View.FORM)} onViewRelease={(r) => { setCurrentRelease(r); setView(View.DASHBOARD); }} />;
-      case View.FORM: return <ReleaseForm onSubmit={async (d) => { await DataService.createRelease(currentUser.id, d); setView(View.MY_RELEASES); }} existingArtists={artists} />;
-      case View.MY_RELEASES: return <MyReleases releases={releases} onViewDashboard={(r) => { setCurrentRelease(r); setView(View.DASHBOARD); }} />;
-      case View.DASHBOARD: return currentRelease ? <Dashboard release={currentRelease} onBackToReleases={() => setView(View.MY_RELEASES)} /> : null;
-      case View.ARTISTS: return <Artists artists={artists} onAddArtist={(a) => DataService.addArtist(currentUser.id, a)} onDeleteArtist={() => {}} />;
+      case View.PROFILE: return <UserProfile currentUser={currentUser} releases={releases} onCreateRelease={() => setView(View.FORM)} onViewRelease={() => setView(View.MY_RELEASES)} />;
+      case View.FORM: return <ReleaseForm onSubmit={async (d) => { await DataService.createRelease(currentUser.id, d); setReleases(await DataService.getReleases(currentUser.id)); setView(View.MY_RELEASES); }} existingArtists={artists} />;
+      case View.MY_RELEASES: return <MyReleases releases={releases} onViewDashboard={() => {}} />;
+      case View.ARTISTS: return <Artists artists={artists} onAddArtist={async (a) => { await DataService.addArtist(currentUser.id, a.name); setArtists(await DataService.getArtists(currentUser.id)); }} onDeleteArtist={() => {}} />;
       case View.PAYOUTS: return <Payouts releases={releases} />;
       case View.CARDS: return <Cards userId={currentUser.id} />;
-      case View.TICKETS: return <Tickets tickets={tickets} currentUser={currentUser} onCreateTicket={(s,c,m) => DataService.createTicket(currentUser.id, currentUser.name, s, c, m)} onReplyTicket={(tid, msg) => DataService.replyTicket(tid, currentUser.id, currentUser.name, msg, currentUser.role === 'admin')} onMarkAsRead={() => {}} />;
-      case View.ADMIN: return <AdminDashboard releases={releases} users={[]} tickets={tickets} onApprove={() => {}} onReject={() => {}} onUpdateFinancials={() => {}} onUpdateUser={() => {}} onReplyTicket={(tid, msg) => DataService.replyTicket(tid, currentUser.id, currentUser.name, msg, true)} onUpdateTicketStatus={() => {}} onMarkAsRead={() => {}} onBanUser={() => {}} />;
-      default: return <UserProfile currentUser={currentUser} releases={releases} onCreateRelease={() => setView(View.FORM)} onViewRelease={(r) => { setCurrentRelease(r); setView(View.DASHBOARD); }} />;
+      case View.TICKETS: return <Tickets tickets={[]} currentUser={currentUser} onCreateTicket={() => {}} onReplyTicket={() => {}} onMarkAsRead={() => {}} />;
+      default: return <UserProfile currentUser={currentUser} releases={releases} onCreateRelease={() => setView(View.FORM)} onViewRelease={() => setView(View.MY_RELEASES)} />;
     }
   };
 
   return (
-    <div className="min-h-screen">
-      {currentUser ? (
-        <div className="flex">
-          <Sidebar currentUser={currentUser} currentView={view} onChangeView={setView} onLogout={handleLogout} tickets={tickets} onCreateRelease={() => setView(View.FORM)} />
-          <main className="flex-1 ml-0 md:ml-64 p-4 md:p-8 animate-fadeIn">{renderView()}</main>
-        </div>
-      ) : (
-        <>
-          <Header onGoHome={() => setView(View.LANDING)} isAuthenticated={false} currentUser={null} onLoginClick={() => setView(View.LOGIN)} onLogout={handleLogout} onMyReleasesClick={() => {}} onAdminClick={() => {}} onPayoutsClick={() => {}} />
-          {renderView()}
-        </>
-      )}
+    <div className="min-h-screen text-slate-200">
+      {!currentUser && <Header onGoHome={() => setView(View.LANDING)} isAuthenticated={false} currentUser={null} onLoginClick={() => setView(View.LOGIN)} onLogout={handleLogout} onMyReleasesClick={() => {}} onAdminClick={() => {}} onPayoutsClick={() => {}} />}
+      
+      <div className={currentUser ? "flex" : ""}>
+        {currentUser && <Sidebar currentUser={currentUser} currentView={view} onChangeView={setView} onLogout={handleLogout} onCreateRelease={() => setView(View.FORM)} />}
+        <main className={currentUser ? "flex-1 ml-0 md:ml-64 p-6" : "container mx-auto"}>
+          {renderContent()}
+        </main>
+      </div>
     </div>
   );
 };

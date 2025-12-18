@@ -1,21 +1,18 @@
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App.tsx';
+import App from './App';
 
-console.log("SCF Music: index.tsx başlatılıyor...");
+console.log("SCF Music: Uygulama yükleniyor...");
 
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  console.error("SCF Music: Root elementi bulunamadı!");
+const container = document.getElementById('root');
+if (container) {
+  const root = createRoot(container);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
 } else {
-  try {
-    const root = createRoot(rootElement);
-    root.render(
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    );
-  } catch (err) {
-    console.error("SCF Music: Render hatası:", err);
-  }
+  console.error("Hata: 'root' elementi bulunamadı!");
 }

@@ -1,30 +1,28 @@
 
-import React from 'react';
-
+// Application state views
 export enum View {
   LANDING = 'landing',
-  FORM = 'form',
-  DASHBOARD = 'dashboard',
   LOGIN = 'login',
   REGISTER = 'register',
-  MY_RELEASES = 'my-releases',
-  ADMIN = 'admin',
-  PAYOUTS = 'payouts',
   PROFILE = 'profile',
+  FORM = 'form',
+  MY_RELEASES = 'my-releases',
   ARTISTS = 'artists',
+  PAYOUTS = 'payouts',
   CARDS = 'cards',
-  TRACKS = 'tracks',
-  INSIGHTS = 'insights',
   TICKETS = 'tickets',
+  ADMIN = 'admin',
+  DASHBOARD = 'dashboard'
 }
 
+// Internal submission status
 export enum ReleaseStatus {
   PENDING_APPROVAL = 'Pending Approval',
   APPROVED = 'Approved',
   REJECTED = 'Rejected',
 }
 
-// Added missing DistributionStatus enum used in Dashboard.tsx
+// Fix: Added DistributionStatus enum used in the Dashboard component to track store delivery progress
 export enum DistributionStatus {
   PENDING = 'Pending',
   PROCESSING = 'Processing',
@@ -38,42 +36,35 @@ export interface User {
   name: string;
   email: string;
   role: 'artist' | 'admin';
-  isBanned?: boolean;
 }
 
 export interface Artist {
   id: string;
   name: string;
+  userId: string;
   spotifyUrl?: string;
   instagramUrl?: string;
 }
 
-export interface PaymentDetails {
-  paypalEmail: string;
-  street: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  country: string;
-}
-
+// Fix: Added missing RoyaltySplit interface used in the ReleaseForm component
 export interface RoyaltySplit {
   collaboratorName: string;
   role: string;
   share: number;
 }
 
+// Fix: Added missing StreamingService interface used for distribution constants
+export interface StreamingService {
+  id: string;
+  name: string;
+}
+
+// Fix: Added missing ReleaseArtist interface to support multi-artist submissions
 export interface ReleaseArtist {
   id: string;
   name: string;
   role: string;
-  bio?: string;
-}
-
-// Added missing StreamingService interface used in ReleaseForm.tsx
-export interface StreamingService {
-  id: string;
-  name: string;
+  bio: string;
 }
 
 export interface Release {
@@ -83,29 +74,31 @@ export interface Release {
   songTitle: string;
   genre: string;
   releaseDate: string;
-  submissionDate?: string;
-  pitchforkScore?: string;
-  copyrightYear: string;
-  copyrightHolder: string;
-  publishingYear: string;
-  publishingHolder: string;
-  producerCredits: string;
-  composer: string;
-  lyricist: string;
-  contactEmail: string;
-  supportPhone: string;
-  audioFile?: File;
+  submissionDate: string;
   artworkPreview: string;
-  selectedServices: string[];
   status: ReleaseStatus;
+  streams: number;
+  revenue: number;
+  // Fix: Expanded Release interface with additional metadata fields used in Dashboard, Admin, and Tracks components
+  statusUpdateDate?: string;
+  selectedServices: string[];
   royaltySplits: RoyaltySplit[];
-  streams?: number;
-  revenue?: number;
+  pitchforkScore?: number;
+  copyrightYear?: string;
+  copyrightHolder?: string;
+  publishingYear?: string;
+  publishingHolder?: string;
+  contactEmail?: string;
+  supportPhone?: string;
+  producerCredits?: string;
+  composer?: string;
+  lyricist?: string;
   artists?: ReleaseArtist[];
+  audioFile?: File | null;
 }
 
+// Fix: Added missing TicketMessage interface for support ticket conversation threads
 export interface TicketMessage {
-  id: string;
   senderId: string;
   senderName: string;
   text: string;
@@ -121,7 +114,18 @@ export interface Ticket {
   category: string;
   status: 'Open' | 'Closed' | 'Resolved';
   lastUpdated: string;
+  // Fix: Updated messages property to use the new TicketMessage interface
   messages: TicketMessage[];
   readByArtist: boolean;
   readByAdmin: boolean;
+}
+
+// Fix: Added missing PaymentDetails interface for user banking/paypal information in the Cards component
+export interface PaymentDetails {
+  paypalEmail: string;
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
 }
