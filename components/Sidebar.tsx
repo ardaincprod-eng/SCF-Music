@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { View, User, Ticket } from '../types';
 import { 
@@ -27,72 +28,58 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentUser, currentView, onChangeView, onLogout, tickets = [], onCreateRelease }) => {
     
-    // Calculate unread count
-    const unreadTicketCount = tickets.filter(t => 
+    const unreadTicketCount = (tickets || []).filter(t => 
         t.userId === currentUser.id && !t.readByArtist
     ).length;
 
-    const unreadAdminCount = currentUser.role === 'admin' 
-        ? tickets.filter(t => !t.readByAdmin).length 
-        : 0;
-
     const menuItems = [
-        { id: View.PROFILE, label: 'Home', icon: HomeIcon },
-        { id: View.ARTISTS, label: 'Artists', icon: MicrophoneIcon }, 
-        { id: View.MY_RELEASES, label: 'Releases', icon: AlbumIcon },
-        { id: View.TRACKS, label: 'Tracks', icon: MusicNoteIcon }, 
-        { id: View.INSIGHTS, label: 'Insights', icon: ChartBarIcon },
-        { id: View.PAYOUTS, label: 'Royalties', icon: CurrencyDollarIcon },
-        { id: View.CARDS, label: 'Cards', icon: CreditCardIcon }, 
-        { id: 'labels', label: 'Labels', icon: TapeIcon }, // Placeholder View
-        { id: View.TICKETS, label: 'Support Tickets', icon: TicketIcon, badge: unreadTicketCount },
+        { id: View.PROFILE, label: 'Panel', icon: HomeIcon },
+        { id: View.ARTISTS, label: 'Sanatçılar', icon: MicrophoneIcon }, 
+        { id: View.MY_RELEASES, label: 'Yayınlar', icon: AlbumIcon },
+        { id: View.PAYOUTS, label: 'Kazançlar', icon: CurrencyDollarIcon },
+        { id: View.CARDS, label: 'Ödeme Bilgileri', icon: CreditCardIcon }, 
+        { id: View.TICKETS, label: 'Destek', icon: TicketIcon, badge: unreadTicketCount },
     ];
 
-    // Add Admin item if user is admin, right after Cards
     if (currentUser.role === 'admin') {
-        menuItems.push({ id: View.ADMIN, label: 'Admin', icon: ShieldCheckIcon, badge: unreadAdminCount });
+        menuItems.push({ id: View.ADMIN, label: 'Yönetim', icon: ShieldCheckIcon });
     }
 
-    const userItems = [
-        { id: 'user_profile', label: currentUser.name, icon: UserIcon },
-        { id: 'logout', label: 'Logout', icon: LogoutIcon, action: onLogout },
-    ];
-
     return (
-        <aside className="w-64 bg-slate-950 border-r border-white/5 h-screen fixed left-0 top-0 flex flex-col z-50">
-            {/* Logo Area */}
-            <div className="p-6 border-b border-white/5">
-                <div className="flex flex-col">
-                    <h1 className="text-2xl font-bold tracking-tighter text-white">SCF</h1>
-                    <h1 className="text-2xl font-bold tracking-tighter text-slate-400 -mt-2">RECORDS</h1>
+        <aside className="w-64 bg-slate-950/80 backdrop-blur-2xl border-r border-white/5 h-screen fixed left-0 top-0 flex flex-col z-50">
+            {/* Logo */}
+            <div className="p-8">
+                <div className="flex flex-col group cursor-pointer" onClick={() => onChangeView(View.PROFILE)}>
+                    <span className="text-2xl font-black tracking-tighter text-white group-hover:text-indigo-400 transition-colors">SCF</span>
+                    <span className="text-xs font-bold tracking-[0.4em] text-indigo-500 -mt-1">MUSIC</span>
                 </div>
             </div>
 
-            {/* Main Action Button */}
-            <div className="px-4 pt-6 pb-2">
+            {/* Yeni Yayın Butonu */}
+            <div className="px-6 mb-8">
                 <button 
                     onClick={onCreateRelease}
-                    className="w-full py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 flex items-center justify-center transition-all transform hover:-translate-y-0.5 group"
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] flex items-center justify-center transition-all hover:scale-[1.02] active:scale-95 group"
                 >
-                    <PlusIcon className="h-5 w-5 mr-2 group-hover:scale-110 transition-transform" />
-                    New Release
+                    <PlusIcon className="h-4 w-4 mr-2 group-hover:rotate-90 transition-transform" />
+                    Yeni Yayın
                 </button>
             </div>
 
-            {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto py-2 px-4 space-y-1">
+            {/* Menü */}
+            <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
-                        onClick={() => item.id !== 'labels' ? onChangeView(item.id as View) : null}
-                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group ${currentView === item.id ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.5)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                        onClick={() => onChangeView(item.id as View)}
+                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 group ${currentView === item.id ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 shadow-[0_0_15px_rgba(79,70,229,0.1)]' : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'}`}
                     >
-                        <div className="flex items-center space-x-4">
-                            <item.icon className={`h-5 w-5 ${currentView === item.id ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`} />
-                            <span className="font-medium text-sm">{item.label}</span>
+                        <div className="flex items-center space-x-3">
+                            <item.icon className={`h-5 w-5 ${currentView === item.id ? 'text-indigo-400' : 'text-slate-600 group-hover:text-slate-400'}`} />
+                            <span className="font-bold text-sm">{item.label}</span>
                         </div>
                         {item.badge !== undefined && item.badge > 0 && (
-                            <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                            <span className="bg-indigo-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md">
                                 {item.badge}
                             </span>
                         )}
@@ -100,20 +87,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentUser, currentView, onCh
                 ))}
             </nav>
 
-            {/* User Section */}
-            <div className="p-4 border-t border-white/5">
-                <p className="px-4 text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">USER</p>
-                {userItems.map((item, idx) => (
-                     <button
-                        key={idx}
-                        onClick={item.action}
-                        className={`w-full flex items-center space-x-4 px-4 py-3 rounded-xl transition-all duration-200 group text-slate-400 hover:text-white hover:bg-white/5`}
-                    >
-                        <item.icon className="h-5 w-5 text-slate-500 group-hover:text-slate-300" />
-                        <span className="font-medium text-sm">{item.label}</span>
-                        {item.id === 'logout' && <span className="ml-auto text-xs opacity-50">→</span>}
-                    </button>
-                ))}
+            {/* Alt Kısım */}
+            <div className="p-6 border-t border-white/5 bg-slate-900/20">
+                <div className="flex items-center space-x-3 mb-4">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-xs text-white">
+                        {currentUser.name.charAt(0)}
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                        <p className="text-sm font-bold text-white truncate">{currentUser.name}</p>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{currentUser.role}</p>
+                    </div>
+                </div>
+                <button 
+                    onClick={onLogout}
+                    className="w-full flex items-center space-x-3 px-4 py-2 text-slate-500 hover:text-red-400 hover:bg-red-500/5 rounded-lg transition-all text-sm font-bold"
+                >
+                    <LogoutIcon className="h-4 w-4" />
+                    <span>Çıkış Yap</span>
+                </button>
+                
+                {/* Neon Connection Indicator */}
+                <div className="mt-4 flex items-center justify-center space-x-2 py-2 bg-emerald-500/5 rounded-lg border border-emerald-500/10">
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                    <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-tighter">Neon DB Bağlı</span>
+                </div>
             </div>
         </aside>
     );

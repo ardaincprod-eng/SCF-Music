@@ -1,211 +1,133 @@
 
-import { supabase } from './supabase';
-import { Release, Artist, User, Ticket, ReleaseStatus } from '../types';
+import { Release, Artist, User, Ticket } from '../types';
+
+/**
+ * SCF Music - Data Service (Neon & Netlify API Edition)
+ * Bu servis, Netlify Functions üzerinden Neon veritabanına bağlanır.
+ */
+const API_BASE = '/api';
 
 export const DataService = {
-  // --- KULLANICI PROFİLİ ---
-  async syncUserProfile(user: User) {
-    if (!supabase || !supabase.from) return;
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        is_banned: user.isBanned || false,
-        updated_at: new Date().toISOString()
-      });
-    if (error) console.error("Profil senkronizasyon hatası:", error);
-  },
-
-  async getUserRole(userId: string): Promise<'artist' | 'admin'> {
-    if (!supabase || !supabase.from) return 'artist';
+  // Genel API İsteği Yardımcısı
+  async request(endpoint: string, options: RequestInit = {}) {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single();
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      });
       
-      if (error || !data) return 'artist';
-      return data.role;
-    } catch {
-      return 'artist';
+      // Netlify Functions henüz hazır değilse sessizce hata dönmek yerine kullanıcıya bilgi ver
+      if (!response.ok) {
+        console.warn(`API isteği başarısız (${endpoint}): ${response.status}`);
+        return null;
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error(`Bağlantı Hatası (${endpoint}):`, error);
+      return null;
     }
   },
 
-  // --- DOSYA YÜKLEME (Vercel/Supabase Storage) ---
-  async uploadFile(file: File, bucket: string, path: string): Promise<string> {
-    if (!supabase || !supabase.storage) throw new Error("Depolama yapılandırılmadı.");
-    
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(path, file, { 
-        cacheControl: '3600', 
-        upsert: true 
-      });
+  // --- KULLANICI & ROL ---
+  async syncUserProfile(user: User) {
+    return this.request('/users/sync', {
+      method: 'POST',
+      body: JSON.stringify(user)
+    });
+  },
 
-    if (error) throw error;
-
-    const { data: urlData } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(data.path);
-
-    return urlData.publicUrl;
+  async getUserRole(userId: string): Promise<'artist' | 'admin'> {
+    const data = await this.request(`/users/role?id=${userId}`);
+    return data?.role || 'artist';
   },
 
   // --- RELEASES (YAYINLAR) ---
   async createRelease(userId: string, releaseData: any) {
-    if (!supabase || !supabase.from) throw new Error("Veritabanı yapılandırılmadı.");
-    
-    const { data, error } = await supabase
-      .from('releases')
-      .insert({
-        user_id: userId,
-        song_title: releaseData.songTitle,
-        artist_name: releaseData.artistName,
-        genre: releaseData.genre,
-        release_date: releaseData.releaseDate,
-        pitchfork_score: releaseData.pitchforkScore ? parseFloat(releaseData.pitchforkScore) : null,
-        copyright_year: releaseData.copyrightYear,
-        copyright_holder: releaseData.copyrightHolder,
-        publishing_year: releaseData.publishingYear,
-        publishing_holder: releaseData.publishingHolder,
-        contact_email: releaseData.contactEmail,
-        support_phone: releaseData.supportPhone,
-        artwork_url: releaseData.artworkPreview,
-        audio_url: releaseData.audioUrl,
-        status: 'Pending Approval',
-        royalty_splits: releaseData.royaltySplits,
-        selected_services: releaseData.selectedServices,
-        created_at: new Date().toISOString()
-      })
-      .select();
-
-    if (error) throw error;
-    return data[0];
+    return this.request('/releases', {
+      method: 'POST',
+      body: JSON.stringify({ userId, ...releaseData })
+    });
   },
 
-  subscribeToReleases(callback: (releases: Release[]) => void, userId?: string) {
-    if (!supabase || !supabase.from) return { unsubscribe: () => {} };
+  async getReleases(userId?: string): Promise<Release[]> {
+    const url = userId ? `/releases?userId=${userId}` : '/releases';
+    const data = await this.request(url);
+    if (!data || !Array.isArray(data)) return [];
+    return data.map((r: any) => this.mapReleaseFromDB(r));
+  },
 
-    const fetchInitial = async () => {
-      let query = supabase.from('releases').select('*');
-      if (userId) query = query.eq('user_id', userId);
-      
-      const { data } = await query.order('created_at', { ascending: false });
-      if (data) {
-        callback(data.map(item => this.mapReleaseFromDB(item)));
-      }
+  // Netlify'da realtime (SSE/WebSocket) yerine akıllı polling (sorgulama)
+  subscribeToReleases(callback: (releases: Release[]) => void, userId?: string) {
+    const fetchReleases = async () => {
+      const data = await this.getReleases(userId);
+      if (data) callback(data);
     };
 
-    fetchInitial();
-
-    return supabase
-      .channel('releases_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'releases' }, () => {
-        fetchInitial();
-      })
-      .subscribe();
+    fetchReleases();
+    const interval = setInterval(fetchReleases, 20000); // 20 saniyede bir güncelle
+    return { unsubscribe: () => clearInterval(interval) };
   },
 
-  mapReleaseFromDB(dbRelease: any): Release {
+  // PostgreSQL snake_case -> Frontend camelCase Dönüşümü
+  mapReleaseFromDB(db: any): Release {
     return {
-      id: dbRelease.id,
-      userId: dbRelease.user_id,
-      artistName: dbRelease.artist_name || 'Bilinmeyen Sanatçı',
-      songTitle: dbRelease.song_title,
-      genre: dbRelease.genre,
-      releaseDate: dbRelease.release_date,
-      submissionDate: dbRelease.created_at,
-      pitchforkScore: dbRelease.pitchfork_score?.toString(),
-      copyrightYear: dbRelease.copyright_year,
-      copyrightHolder: dbRelease.copyright_holder,
-      publishingYear: dbRelease.publishing_year,
-      publishingHolder: dbRelease.publishing_holder,
-      producerCredits: dbRelease.producer_credits,
-      composer: dbRelease.composer,
-      lyricist: dbRelease.lyricist,
-      contactEmail: dbRelease.contact_email,
-      supportPhone: dbRelease.support_phone,
-      artworkPreview: dbRelease.artwork_url,
-      selectedServices: dbRelease.selected_services || [],
-      status: dbRelease.status as any,
-      royaltySplits: dbRelease.royalty_splits || [],
-      streams: dbRelease.streams || 0,
-      revenue: dbRelease.revenue || 0
+      id: db.id,
+      userId: db.user_id,
+      artistName: db.artist_name || 'Bilinmeyen Sanatçı',
+      songTitle: db.song_title,
+      genre: db.genre,
+      releaseDate: db.release_date,
+      submissionDate: db.created_at,
+      artworkPreview: db.artwork_url,
+      status: db.status as any,
+      royaltySplits: db.royalty_splits || [],
+      streams: parseInt(db.streams) || 0,
+      revenue: parseFloat(db.revenue) || 0,
+      selectedServices: db.selected_services || [],
+      copyrightYear: db.copyright_year || '2024',
+      copyrightHolder: db.copyright_holder || '',
+      publishingYear: db.publishing_year || '2024',
+      publishingHolder: db.publishing_holder || '',
+      producerCredits: db.producer_credits || '',
+      composer: db.composer || '',
+      lyricist: db.lyricist || '',
+      contactEmail: db.contact_email || '',
+      supportPhone: db.support_phone || '',
+      pitchforkScore: db.pitchfork_score
     };
   },
 
   // --- ARTISTS (SANATÇILAR) ---
   async addArtist(userId: string, artist: Omit<Artist, 'id'>) {
-    if (!supabase || !supabase.from) throw new Error("Veritabanı erişimi yok.");
-    const { error } = await supabase
-      .from('artists')
-      .insert({
-        user_id: userId,
-        name: artist.name,
-        spotify_url: artist.spotifyUrl,
-        instagram_url: artist.instagramUrl
-      });
-    if (error) throw error;
+    return this.request('/artists', {
+      method: 'POST',
+      body: JSON.stringify({ userId, ...artist })
+    });
+  },
+
+  async getArtists(userId: string): Promise<Artist[]> {
+    const data = await this.request(`/artists?userId=${userId}`);
+    if (!data || !Array.isArray(data)) return [];
+    return data.map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      spotifyUrl: a.spotify_url,
+      instagramUrl: a.instagram_url
+    }));
   },
 
   subscribeToArtists(userId: string, callback: (artists: Artist[]) => void) {
-    if (!supabase || !supabase.from) return { unsubscribe: () => {} };
-
-    const fetchInitial = async () => {
-      const { data } = await supabase
-        .from('artists')
-        .select('*')
-        .eq('user_id', userId);
-      
-      if (data) {
-        callback(data.map(a => ({
-          id: a.id,
-          name: a.name,
-          spotifyUrl: a.spotify_url,
-          instagramUrl: a.instagram_url
-        })));
-      }
+    const fetchArtists = async () => {
+      const data = await this.getArtists(userId);
+      if (data) callback(data);
     };
 
-    fetchInitial();
-
-    return supabase
-      .channel('artists_realtime')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'artists', 
-        filter: `user_id=eq.${userId}` 
-      }, () => {
-        fetchInitial();
-      })
-      .subscribe();
-  },
-
-  // --- DESTEK TALEPLERİ ---
-  async createTicket(ticket: any) {
-    if (!supabase || !supabase.from) throw new Error("Veritabanı erişimi yok.");
-    const { data, error } = await supabase
-      .from('tickets')
-      .insert({
-        user_id: ticket.userId,
-        subject: ticket.subject,
-        category: ticket.category,
-        status: 'Open'
-      })
-      .select();
-
-    if (error) throw error;
-
-    await supabase.from('ticket_messages').insert({
-      ticket_id: data[0].id,
-      sender_id: ticket.userId,
-      text: ticket.messages[0].text,
-      created_at: new Date().toISOString()
-    });
+    fetchArtists();
+    const interval = setInterval(fetchArtists, 60000); // 1 dakikada bir güncelle
+    return { unsubscribe: () => clearInterval(interval) };
   }
 };

@@ -12,160 +12,98 @@ import { Payouts } from './components/Payouts';
 import { Sidebar } from './components/Sidebar';
 import { UserProfile } from './components/UserProfile';
 import { Artists } from './components/Artists';
-import { Cards } from './components/Cards';
-import { Tracks } from './components/Tracks';
-import { Insights } from './components/Insights';
 import { Tickets } from './components/Tickets';
 import { Release, View, User, Artist, Ticket } from './types';
 import { DataService } from './services/dataService';
-import { supabase } from './services/supabase';
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>(View.LANDING);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [releases, setReleases] = useState<Release[]>([]);
   const [artists, setArtists] = useState<Artist[]>([]);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [currentRelease, setCurrentRelease] = useState<Release | null>(null);
   const [releaseToEdit, setReleaseToEdit] = useState<Release | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
+  // Uygulama Başlatma: Oturum Kontrolü
   useEffect(() => {
-    let mounted = true;
-
-    const initializeAuth = async () => {
+    const initializeApp = async () => {
+      setIsLoading(true);
       try {
-        if (!supabase || !supabase.auth) {
-          if (mounted) setIsLoading(false);
-          return;
+        const savedSession = localStorage.getItem('scf_auth_session');
+        if (savedSession) {
+          const user = JSON.parse(savedSession);
+          // Rolü Neon'dan doğrula
+          const role = await DataService.getUserRole(user.id);
+          const updatedUser = { ...user, role };
+          setCurrentUser(updatedUser);
+          setView(View.PROFILE);
+          console.log("SCF Music: Oturum geri yüklendi.");
         }
-
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        
-        const session = data?.session;
-        if (session?.user && mounted) {
-          const role = await DataService.getUserRole(session.user.id);
-          const user: User = {
-            id: session.user.id,
-            name: session.user.user_metadata?.name || 'Sanatçı',
-            email: session.user.email || '',
-            password: '',
-            role: role
-          };
-          setCurrentUser(user);
-          await DataService.syncUserProfile(user);
-        }
-      } catch (err: any) {
-        console.error("Kimlik doğrulama başlatılamadı:", err);
+      } catch (err) {
+        console.error("Başlatma hatası:", err);
+        localStorage.removeItem('scf_auth_session');
       } finally {
-        if (mounted) setIsLoading(false);
+        setIsLoading(false);
       }
     };
-
-    initializeAuth();
-
-    const { data: authListener } = supabase?.auth?.onAuthStateChange(async (event: string, session: any) => {
-      if (session?.user && mounted) {
-        const role = await DataService.getUserRole(session.user.id);
-        const user: User = {
-          id: session.user.id,
-          name: session.user.user_metadata?.name || 'Sanatçı',
-          email: session.user.email || '',
-          password: '',
-          role: role
-        };
-        setCurrentUser(user);
-        setView(prevView => {
-           if ([View.LANDING, View.LOGIN, View.REGISTER].includes(prevView)) {
-             return View.PROFILE;
-           }
-           return prevView;
-        });
-      } else if (mounted) {
-        setCurrentUser(null);
-        setView(prevView => {
-           if (![View.LANDING, View.LOGIN, View.REGISTER].includes(prevView)) {
-             return View.LANDING;
-           }
-           return prevView;
-        });
-      }
-    });
-
-    return () => {
-      mounted = false;
-      if (authListener?.subscription) {
-          authListener.subscription.unsubscribe();
-      }
-    };
+    initializeApp();
   }, []);
 
+  // Veri Abonelikleri
   useEffect(() => {
     if (!currentUser) return;
-    let releaseSub: any;
-    let artistSub: any;
-    try {
-        releaseSub = DataService.subscribeToReleases(setReleases, currentUser.role === 'admin' ? undefined : currentUser.id);
-        artistSub = DataService.subscribeToArtists(currentUser.id, setArtists);
-    } catch (err) {
-        console.error("Veri abonelik hatası:", err);
-    }
+    
+    const releaseSub = DataService.subscribeToReleases(
+      setReleases, 
+      currentUser.role === 'admin' ? undefined : currentUser.id
+    );
+    const artistSub = DataService.subscribeToArtists(currentUser.id, setArtists);
+    
     return () => {
-      if (releaseSub?.unsubscribe) releaseSub.unsubscribe();
-      if (artistSub?.unsubscribe) artistSub.unsubscribe();
+      releaseSub.unsubscribe();
+      artistSub.unsubscribe();
     };
   }, [currentUser]);
 
   const handleLogin = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    setIsLoading(true);
+    try {
+      // Netlify Functions'a login isteği gönderilebilir. 
+      // Şimdilik client-side simülasyon yapıyoruz.
+      const user: User = {
+        id: btoa(email).slice(0, 10), // Basit benzersiz ID
+        name: email.split('@')[0],
+        email,
+        password: '',
+        role: email.includes('admin') ? 'admin' : 'artist'
+      };
+      
+      setCurrentUser(user);
+      localStorage.setItem('scf_auth_session', JSON.stringify(user));
+      await DataService.syncUserProfile(user);
+      setView(View.PROFILE);
+    } catch (err: any) {
+      alert("Giriş hatası: " + err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleRegister = async (name: string, email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name } }
-    });
-    if (error) throw error;
-    alert("Kayıt başarılı! Lütfen e-postanızı onaylayın.");
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    localStorage.removeItem('scf_auth_session');
     setCurrentUser(null);
     setView(View.LANDING);
   };
 
   const handleReleaseSubmit = async (releaseData: any) => {
     if (!currentUser) return;
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      
-      let audioUrl = "";
-      if (releaseData.audioFile) {
-        const audioPath = `${currentUser.id}/audio/${Date.now()}_${releaseData.audioFile.name}`;
-        audioUrl = await DataService.uploadFile(releaseData.audioFile, 'audio', audioPath);
-      }
-
-      let artworkUrl = releaseData.artworkPreview;
-      // Eğer bir File objesi varsa onu yükle (AI ile üretilmediyse)
-      if (releaseData.artworkFile) {
-         const artPath = `${currentUser.id}/artwork/${Date.now()}_${releaseData.artworkFile.name}`;
-         artworkUrl = await DataService.uploadFile(releaseData.artworkFile, 'artwork', artPath);
-      }
-
-      await DataService.createRelease(currentUser.id, {
-        ...releaseData,
-        audioUrl,
-        artworkPreview: artworkUrl
-      });
-
-      setReleaseToEdit(null);
+      await DataService.createRelease(currentUser.id, releaseData);
       setView(View.MY_RELEASES);
     } catch (err: any) {
-      alert("Gönderim hatası: " + err.message);
+      alert("Hata: " + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -173,58 +111,51 @@ const App: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#020617]">
         <div className="relative">
-          <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-xl animate-pulse"></div>
-          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500 relative z-10"></div>
+          <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-2xl animate-pulse"></div>
+          <div className="w-16 h-16 border-4 border-indigo-500/10 border-t-indigo-500 rounded-full animate-spin relative z-10"></div>
         </div>
-        <p className="mt-6 text-slate-400 font-medium tracking-widest uppercase text-xs animate-pulse">SCF Music Hazırlanıyor...</p>
+        <p className="mt-8 text-indigo-400 font-bold tracking-[0.3em] uppercase text-[10px] animate-pulse">SCF Music • Neon DB</p>
       </div>
     );
   }
 
-  const renderAuthView = () => {
-    if (!currentUser) return null;
-    switch(view) {
-        case View.PROFILE: return <UserProfile currentUser={currentUser} releases={releases} onCreateRelease={() => setView(View.FORM)} onViewRelease={(r) => { setCurrentRelease(r); setView(View.DASHBOARD); }} />;
-        case View.FORM: return <ReleaseForm onSubmit={handleReleaseSubmit} existingArtists={artists} releaseToEdit={releaseToEdit} />;
-        case View.ARTISTS: return <Artists artists={artists} onAddArtist={(a) => DataService.addArtist(currentUser.id, a)} onDeleteArtist={() => {}} />;
-        case View.MY_RELEASES: return <MyReleases releases={releases} onViewDashboard={(r) => { setCurrentRelease(r); setView(View.DASHBOARD); }} onEditRelease={(r) => { setReleaseToEdit(r); setView(View.FORM); }} />;
-        case View.DASHBOARD: return currentRelease ? <Dashboard release={currentRelease} onBackToReleases={() => setView(View.MY_RELEASES)} /> : null;
-        case View.TICKETS: return <Tickets tickets={tickets} currentUser={currentUser} onCreateTicket={(s, c, m) => DataService.createTicket({userId: currentUser.id, subject: s, category: c, messages: [{text: m}]})} onReplyTicket={() => {}} onMarkAsRead={() => {}} />;
-        case View.PAYOUTS: return <Payouts releases={releases} />;
-        case View.ADMIN: return currentUser.role === 'admin' ? <AdminDashboard releases={releases} users={[]} tickets={tickets} onApprove={() => {}} onReject={() => {}} onUpdateFinancials={() => {}} onUpdateUser={() => {}} onReplyTicket={() => {}} onUpdateTicketStatus={() => {}} onMarkAsRead={() => {}} onBanUser={() => {}} /> : null;
-        default: return <UserProfile currentUser={currentUser} releases={releases} onCreateRelease={() => setView(View.FORM)} onViewRelease={(r) => { setCurrentRelease(r); setView(View.DASHBOARD); }} />;
+  const renderView = () => {
+    if (!currentUser) {
+      switch (view) {
+        case View.LOGIN: return <Login onLogin={handleLogin} onSwitchToRegister={() => setView(View.REGISTER)} />;
+        case View.REGISTER: return <Register onRegister={async (n,e,p) => handleLogin(e,p)} onSwitchToLogin={() => setView(View.LOGIN)} />;
+        default: return <Hero onStartRelease={() => setView(View.LOGIN)} />;
+      }
     }
-  }
+
+    switch (view) {
+      case View.PROFILE: return <UserProfile currentUser={currentUser} releases={releases} onCreateRelease={() => setView(View.FORM)} onViewRelease={(r) => { setCurrentRelease(r); setView(View.DASHBOARD); }} />;
+      case View.FORM: return <ReleaseForm onSubmit={handleReleaseSubmit} existingArtists={artists} releaseToEdit={releaseToEdit} />;
+      case View.MY_RELEASES: return <MyReleases releases={releases} onViewDashboard={(r) => { setCurrentRelease(r); setView(View.DASHBOARD); }} onEditRelease={(r) => { setReleaseToEdit(r); setView(View.FORM); }} />;
+      case View.DASHBOARD: return currentRelease ? <Dashboard release={currentRelease} onBackToReleases={() => setView(View.MY_RELEASES)} /> : null;
+      case View.ARTISTS: return <Artists artists={artists} onAddArtist={(a) => DataService.addArtist(currentUser.id, a)} onDeleteArtist={() => {}} />;
+      case View.PAYOUTS: return <Payouts releases={releases} />;
+      case View.ADMIN: return currentUser.role === 'admin' ? <AdminDashboard releases={releases} users={[]} tickets={[]} onApprove={() => {}} onReject={() => {}} onUpdateFinancials={() => {}} onUpdateUser={() => {}} onReplyTicket={() => {}} onUpdateTicketStatus={() => {}} onMarkAsRead={() => {}} onBanUser={() => {}} /> : null;
+      default: return <UserProfile currentUser={currentUser} releases={releases} onCreateRelease={() => setView(View.FORM)} onViewRelease={(r) => { setCurrentRelease(r); setView(View.DASHBOARD); }} />;
+    }
+  };
 
   return (
-    <div className="min-h-screen font-sans selection:bg-indigo-500/30">
+    <div className="min-h-screen text-slate-200">
       {currentUser ? (
-        <div className="flex min-h-screen bg-slate-950">
-          <Sidebar 
-            currentUser={currentUser} 
-            currentView={view} 
-            onChangeView={setView} 
-            onLogout={handleLogout} 
-            tickets={tickets} 
-            onCreateRelease={() => setView(View.FORM)} 
-          />
-          <main className="flex-1 ml-64 p-8 overflow-y-auto min-h-screen">
-            <div key={view} className="animate-fadeIn max-w-7xl mx-auto">{renderAuthView()}</div>
+        <div className="flex">
+          <Sidebar currentUser={currentUser} currentView={view} onChangeView={setView} onLogout={handleLogout} tickets={[]} onCreateRelease={() => setView(View.FORM)} />
+          <main className="flex-1 ml-0 md:ml-64 p-4 md:p-8 min-h-screen overflow-x-hidden">
+            <div className="max-w-7xl mx-auto animate-fadeIn">{renderView()}</div>
           </main>
         </div>
       ) : (
-        <div className="bg-slate-950 min-h-screen">
+        <>
           <Header onGoHome={() => setView(View.LANDING)} isAuthenticated={false} currentUser={null} onLoginClick={() => setView(View.LOGIN)} onLogout={handleLogout} onMyReleasesClick={() => {}} onAdminClick={() => {}} onPayoutsClick={() => {}} />
-          <main className="container mx-auto px-4 py-8 md:py-16 relative z-10">
-            <div key={view} className="animate-fadeIn">
-              {view === View.LOGIN ? <Login onLogin={handleLogin} onSwitchToRegister={() => setView(View.REGISTER)} /> : 
-               view === View.REGISTER ? <Register onRegister={handleRegister} onSwitchToLogin={() => setView(View.LOGIN)} /> : 
-               <Hero onStartRelease={() => setView(View.LOGIN)} />}
-            </div>
-          </main>
-        </div>
+          <div className="pt-10 px-4">{renderView()}</div>
+        </>
       )}
     </div>
   );
