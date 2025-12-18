@@ -1,23 +1,22 @@
-
 import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
-import { Hero } from './components/Hero';
-import { ReleaseForm } from './components/ReleaseForm';
-import { Dashboard } from './components/Dashboard';
-import { Login } from './components/Login';
-import { Register } from './components/Register';
-import { MyReleases } from './components/MyReleases';
-import { AdminDashboard } from './components/AdminDashboard';
-import { Payouts } from './components/Payouts';
-import { Sidebar } from './components/Sidebar';
-import { UserProfile } from './components/UserProfile';
-import { Artists } from './components/Artists';
-import { Tickets } from './components/Tickets';
-import { Cards } from './components/Cards';
-import { Tracks } from './components/Tracks';
-import { Insights } from './components/Insights';
-import { Release, View, User, Artist, Ticket } from './types';
-import { DataService } from './services/dataService';
+import { Header } from './components/Header.tsx';
+import { Hero } from './components/Hero.tsx';
+import { ReleaseForm } from './components/ReleaseForm.tsx';
+import { Dashboard } from './components/Dashboard.tsx';
+import { Login } from './components/Login.tsx';
+import { Register } from './components/Register.tsx';
+import { MyReleases } from './components/MyReleases.tsx';
+import { AdminDashboard } from './components/AdminDashboard.tsx';
+import { Payouts } from './components/Payouts.tsx';
+import { Sidebar } from './components/Sidebar.tsx';
+import { UserProfile } from './components/UserProfile.tsx';
+import { Artists } from './components/Artists.tsx';
+import { Tickets } from './components/Tickets.tsx';
+import { Cards } from './components/Cards.tsx';
+import { Tracks } from './components/Tracks.tsx';
+import { Insights } from './components/Insights.tsx';
+import { Release, View, User, Artist, Ticket } from './types.ts';
+import { DataService } from './services/dataService.ts';
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>(View.LANDING);
@@ -34,10 +33,13 @@ const App: React.FC = () => {
         const savedSession = localStorage.getItem('scf_auth_session');
         if (savedSession) {
           const user = JSON.parse(savedSession);
-          const role = await DataService.getUserRole(user.id);
+          // API hatası olsa bile kullanıcıyı artist rolüyle içeri al
+          const role = await DataService.getUserRole(user.id).catch(() => 'artist');
           setCurrentUser({ ...user, role });
           setView(View.PROFILE);
         }
+      } catch (err) {
+        console.error("Uygulama başlatma hatası:", err);
       } finally {
         setIsLoading(false);
       }
@@ -55,26 +57,33 @@ const App: React.FC = () => {
     const artistSub = DataService.subscribeToArtists(currentUser.id, setArtists);
     
     const fetchTickets = async () => {
-      const data = await DataService.getTickets(currentUser.role === 'admin' ? undefined : currentUser.id);
-      setTickets(data);
+      try {
+        const data = await DataService.getTickets(currentUser.role === 'admin' ? undefined : currentUser.id);
+        if (data) setTickets(data);
+      } catch (e) {
+        console.warn("Biletler yüklenemedi");
+      }
     };
     fetchTickets();
 
     return () => {
-      releaseSub.unsubscribe();
-      artistSub.unsubscribe();
+      if (releaseSub) releaseSub.unsubscribe();
+      if (artistSub) artistSub.unsubscribe();
     };
   }, [currentUser]);
 
   const handleLogin = async (email: string, password: string) => {
     setIsLoading(true);
-    const role = email.includes('admin') ? 'admin' : 'artist';
-    const user: User = { id: btoa(email).slice(0, 10), name: email.split('@')[0].toUpperCase(), email, role };
-    setCurrentUser(user);
-    localStorage.setItem('scf_auth_session', JSON.stringify(user));
-    await DataService.syncUserProfile(user);
-    setView(View.PROFILE);
-    setIsLoading(false);
+    try {
+      const role = email.includes('admin') ? 'admin' : 'artist';
+      const user: User = { id: btoa(email).slice(0, 10), name: email.split('@')[0].toUpperCase(), email, role };
+      setCurrentUser(user);
+      localStorage.setItem('scf_auth_session', JSON.stringify(user));
+      await DataService.syncUserProfile(user);
+      setView(View.PROFILE);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -106,7 +115,14 @@ const App: React.FC = () => {
     }
   };
 
-  if (isLoading) return <div className="min-h-screen bg-[#020617] flex items-center justify-center"><div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center">
+        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-slate-500 font-bold tracking-widest text-xs uppercase">SCF Music Yükleniyor...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen text-slate-200">

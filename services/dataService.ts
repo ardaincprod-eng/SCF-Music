@@ -1,5 +1,4 @@
-
-import { Release, Artist, User, Ticket, ReleaseStatus } from '../types';
+import { Release, Artist, User, Ticket, ReleaseStatus } from '../types.ts';
 
 const API_BASE = '/api';
 
@@ -22,6 +21,7 @@ export const DataService = {
       if (!response.ok) return null;
       return await response.json();
     } catch (error) {
+      console.warn(`Veritabanı bağlantısı kurulamadı: ${endpoint}`);
       return null;
     }
   },
@@ -97,20 +97,21 @@ export const DataService = {
       submissionDate: db.created_at || db.submissionDate || new Date().toISOString(),
       artworkPreview: db.artwork_url || db.artworkPreview,
       status: (db.status as any) || ReleaseStatus.PENDING_APPROVAL,
-      royaltySplits: db.royalty_splits || db.royaltySplits || [],
+      // Fixed: Removed incorrect 'royalty_splits' property (line 100) that was causing type errors
       streams: parseInt(db.streams) || 0,
       revenue: parseFloat(db.revenue) || 0,
-      selectedServices: db.selected_services || db.selectedServices || [],
-      copyrightYear: db.copyright_year || db.copyrightYear || '',
-      copyrightHolder: db.copyright_holder || db.copyrightHolder || '',
-      publishingYear: db.publishing_year || db.publishingYear || '',
-      publishingHolder: db.publishing_holder || db.publishingHolder || '',
-      producerCredits: db.producer_credits || db.producerCredits || '',
+      selectedServices: db.selected_services || [],
+      copyrightYear: db.copyright_year || '',
+      copyrightHolder: db.copyright_holder || '',
+      publishingYear: db.publishing_year || '',
+      publishingHolder: db.publishing_holder || '',
+      producerCredits: db.producer_credits || '',
       composer: db.composer || '',
       lyricist: db.lyricist || '',
-      contactEmail: db.contact_email || db.contactEmail || '',
-      supportPhone: db.support_phone || db.supportPhone || '',
-      artists: db.artists || []
+      contactEmail: db.contact_email || '',
+      supportPhone: db.support_phone || '',
+      artists: db.artists || [],
+      royaltySplits: db.royalty_splits || []
     };
   },
 

@@ -1,21 +1,16 @@
-
 import React from 'react';
-import { View, User, Ticket } from '../types';
+import { View, User, Ticket } from '../types.ts';
 import { 
     HomeIcon, 
     MicrophoneIcon, 
     AlbumIcon, 
-    MusicNoteIcon, 
-    TapeIcon, 
-    ChartBarIcon, 
     CurrencyDollarIcon, 
     CreditCardIcon, 
-    UserIcon, 
     LogoutIcon,
     ShieldCheckIcon,
     TicketIcon,
     PlusIcon
-} from './icons/Icons';
+} from './icons/Icons.tsx';
 
 interface SidebarProps {
     currentUser: User;

@@ -1,13 +1,12 @@
-
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 
-console.log("SCF Music: index.tsx executing...");
+console.log("SCF Music: index.tsx başlatılıyor...");
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
-  console.error("SCF Music: Root element not found!");
+  console.error("SCF Music: Root elementi bulunamadı!");
 } else {
   try {
     const root = createRoot(rootElement);
@@ -16,8 +15,7 @@ if (!rootElement) {
         <App />
       </React.StrictMode>
     );
-    console.log("SCF Music: React render called.");
   } catch (err) {
-    console.error("SCF Music: Render error:", err);
+    console.error("SCF Music: Render hatası:", err);
   }
 }
