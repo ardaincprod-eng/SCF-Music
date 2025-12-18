@@ -6,6 +6,10 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SCF Music - Global Distribution</title>
+    <script>
+      // Browser environment polyfill to prevent "process is not defined"
+      window.process = { env: { NODE_ENV: 'production' } };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -14,11 +18,16 @@
             animation: {
               'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               'glow': 'glow 2s ease-in-out infinite alternate',
+              'fadeIn': 'fadeIn 0.5s ease-out forwards',
             },
             keyframes: {
               glow: {
                 'from': { 'box-shadow': '0 0 10px rgba(99, 102, 241, 0.2)' },
                 'to': { 'box-shadow': '0 0 20px rgba(99, 102, 241, 0.5)' }
+              },
+              fadeIn: {
+                'from': { opacity: '0', transform: 'translateY(10px)' },
+                'to': { opacity: '1', transform: 'translateY(0)' }
               }
             }
           }
@@ -49,7 +58,6 @@
             overflow-x: hidden;
         }
         
-        /* Glassmorphism Classes */
         .glass {
             background: rgba(15, 23, 42, 0.6);
             backdrop-filter: blur(12px);

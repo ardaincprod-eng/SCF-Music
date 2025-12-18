@@ -1,4 +1,4 @@
-// FIX: Add import for React to resolve 'Cannot find namespace 'React'' error.
+
 import React from 'react';
 
 export enum View {
@@ -18,6 +18,13 @@ export enum View {
   TICKETS = 'tickets',
 }
 
+export enum ReleaseStatus {
+  PENDING_APPROVAL = 'Pending Approval',
+  APPROVED = 'Approved',
+  REJECTED = 'Rejected',
+}
+
+// Added missing DistributionStatus enum used in Dashboard.tsx
 export enum DistributionStatus {
   PENDING = 'Pending',
   PROCESSING = 'Processing',
@@ -26,26 +33,18 @@ export enum DistributionStatus {
   ERROR = 'Error',
 }
 
-export enum ReleaseStatus {
-  PENDING_APPROVAL = 'Pending Approval',
-  APPROVED = 'Approved',
-  REJECTED = 'Rejected',
-}
-
 export interface User {
   id: string;
   name: string;
   email: string;
-  password: string; // In a real app, this should be a hash
   role: 'artist' | 'admin';
-  isBanned?: boolean; // New property to track ban status
+  isBanned?: boolean;
 }
 
 export interface Artist {
   id: string;
   name: string;
   spotifyUrl?: string;
-  appleMusicUrl?: string;
   instagramUrl?: string;
 }
 
@@ -64,12 +63,6 @@ export interface RoyaltySplit {
   share: number;
 }
 
-export interface StatusHistoryEntry {
-  status: ReleaseStatus;
-  date: string;
-  note?: string;
-}
-
 export interface ReleaseArtist {
   id: string;
   name: string;
@@ -77,15 +70,21 @@ export interface ReleaseArtist {
   bio?: string;
 }
 
+// Added missing StreamingService interface used in ReleaseForm.tsx
+export interface StreamingService {
+  id: string;
+  name: string;
+}
+
 export interface Release {
   id: string;
   userId: string;
-  artistName: string; // This is often the user's name but can be different
+  artistName: string;
   songTitle: string;
   genre: string;
   releaseDate: string;
-  submissionDate?: string; // Date when the user clicked submit
-  pitchforkScore?: string; // Optional score (e.g. "8.5")
+  submissionDate?: string;
+  pitchforkScore?: string;
   copyrightYear: string;
   copyrightHolder: string;
   publishingYear: string;
@@ -95,21 +94,14 @@ export interface Release {
   lyricist: string;
   contactEmail: string;
   supportPhone: string;
-  audioFile?: File; // Made optional for persistence and editing flows
+  audioFile?: File;
   artworkPreview: string;
   selectedServices: string[];
   status: ReleaseStatus;
-  statusUpdateDate?: string;
-  statusHistory?: StatusHistoryEntry[]; // Added for history tracking
   royaltySplits: RoyaltySplit[];
-  streams?: number; // Added for royalty management
-  revenue?: number; // Added for royalty management
-  artists?: ReleaseArtist[]; // Detailed artist info including roles and bios
-}
-
-export interface StreamingService {
-  id: string;
-  name: string;
+  streams?: number;
+  revenue?: number;
+  artists?: ReleaseArtist[];
 }
 
 export interface TicketMessage {
